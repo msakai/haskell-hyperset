@@ -61,13 +61,16 @@ fsIsSingleton :: (Ord a) => FS.Set a -> Bool
 fsIsSingleton x = FS.cardinality x == 1
 
 {-# INLINE fsSplit #-}
-fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> Maybe (FS.Set a, FS.Set a)
+-- fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> Maybe (FS.Set a, FS.Set a)
+-- とするのが自然だけど、この関数はボトルネックなので、
+-- unboxed tuple が使われることを期待してタプルで返している
+fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> (Bool, FS.Set a, FS.Set a)
 fsSplit x splitter = seq x $ seq splitter $
       if FS.isEmptySet i
-      then Nothing
+      then (False, undefined, undefined)
       else if (FS.cardinality x == FS.cardinality i)
-           then Nothing
-           else Just (i, x `FS.minusSet` i)
+           then (False, undefined, undefined)
+           else (True, i, x `FS.minusSet` i)
     where i = x `FS.intersect` splitter
 
 showSet :: (Show u, Ord u) => Set u -> String
@@ -329,10 +332,6 @@ succRank :: Rank -> Rank
 succRank (Rank n)   = Rank (n+1)
 succRank RankNegInf = RankNegInf
 
---type Rank = Maybe Int
--- Nothing means -∞.
--- Assuming that (Ord a => Ord (Maybe a)) and (∀x. Nothing < Just x).
-
 rankTable :: Graph -> Table Rank
 rankTable g = fmap snd (attrTable g)
 
@@ -416,8 +415,8 @@ refine g p rank v =
                         | fsIsSingleton p = p : ps
                         | otherwise =
                             case fsSplit p vs of
-                            Just (a,b) -> a : b : ps
-                            Nothing    -> p : ps
+                            (True,a,b) -> a : b : ps
+                            _          -> p : ps
 
 -----------------------------------------------------------------------------
 
@@ -501,8 +500,8 @@ stabilize g b xs =
                         | fsIsSingleton p = (p:ss,ps,qs)
                         | otherwise =
                             case fsSplit p splitter of
-                            Just (a,b) -> (ss, a:b:ps, a:b:qs)
-                            Nothing    -> (ss, p : ps, qs)
+                            (True,a,b) -> (ss, a:b:ps, a:b:qs)
+                            _          -> (ss, p : ps, qs)
 
 -----------------------------------------------------------------------------
 
