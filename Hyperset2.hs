@@ -114,8 +114,24 @@ partitionM f = foldM g ([],[])
 
 -----------------------------------------------------------------------------
 
-minimize :: (Ord u) => TaggedGraph u -> ST st (G st)
-minimize (graph, tagging) =
+minimize :: (Ord u) => TaggedGraph u -> (TaggedGraph u, Table Vertex)
+minimize tg@(g,t) = ((g',t'), m)
+    where g' = array (0, sizeFM fm - 1)
+                 [(i, sort $ nub $ [m!ch | ch <- g!x]) | (i,x:_) <- c]
+          t' = listToFM [(m!v,u) | (v,u) <- fmToList t]
+          m = array (bounds g) [(x,i) | (i,xs) <- c, x <- xs]
+          c :: [(Int,[Vertex])]
+          c = zip [0..] (eltsFM fm)
+          fm :: FiniteMap Vertex [Vertex]
+          fm = addListToFM_C (\old new -> new++old) emptyFM
+                 [(v',[v]) | (v,v') <- m1]
+          m1 :: [(Vertex,Vertex)]
+          m1 = runST (do gg <- minimize' tg
+                         mapM (\v -> do v' <- apply gg v; return (v,v'))
+                              (indices g))
+
+minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
+minimize' (graph, tagging) =
     do g <- mkGFromGraph graph
        p_ <- mapM (\(r,vs) -> do ref <- newSTRef [vs]; return (r,ref))
                   (fmToList b)
@@ -125,13 +141,13 @@ minimize (graph, tagging) =
            Just xs@(x:_) ->
                do collapseList g xs
                   refine g p Nothing x
-       let loop (i,ref) = do when (i==Just 0)
-                                  (modifySTRef ref (divideRank0 tagging))
-                             di <- readSTRef ref
-                             let f xs = do collapseList g xs
-                                           ns <- liftM nub (mapM (apply g) xs)
-                                           mapM_ (refine g p i) ns
-                             mapM_ f di
+       let loop (i,ref) =
+               do when (i==Just 0) (modifySTRef ref (divideRank0 tagging))
+                  di <- readSTRef ref
+                  let f xs = do collapseList g xs
+                                ns <- liftM nub (mapM (apply g) xs)
+                                mapM_ (refine g p i) ns
+                  mapM_ f di
        mapM_ loop (fmToList (delFromFM p Nothing))
        return g
     where rankT :: Table Rank
