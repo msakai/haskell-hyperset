@@ -153,7 +153,7 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
 
 -- XXX: 汚いなぁ
 powerset :: (Show u, Ord u) => Set u -> Set u
-powerset s@(Set sys v) = trace (seq g' $ show (g',t)) $ constructSet (g',t) v'
+powerset s@(Set sys v) = constructSet (g',t) v'
     where g = sysGraph sys
           t = sysTagging sys
           (lb,ub) = bounds g
@@ -253,7 +253,7 @@ apply' g x =
           Right parents -> return (x,parents)
           Left y ->
               do (z, parents) <- apply' g y
-                 unless (y==z) (writeArray g x (Left z))
+                 unless (y==z) (writeArray g x (Left z)) -- 経路圧縮
                  return (z, parents)
 
 collapse :: G st -> Vertex -> Vertex -> ST st Vertex
@@ -291,7 +291,7 @@ refine g p r v =
 minimize :: (Ord u) => TaggedGraph u -> (TaggedGraph u, Table Vertex)
 minimize tg@(g,t) = ((g',t'), m)
     where g' = array (0, sizeFM fm - 1)
-                 [(i, sort $ nub $ [m!ch | ch <- g!x]) | (i,x:_) <- c]
+                 [(i, sort $ nub $ map (m!) (g!x)) | (i,x:_) <- c]
           t' = listToFM [(m!v,u) | (v,u) <- fmToList t]
           m = array (bounds g) [(x,i) | (i,xs) <- c, x <- xs]
           c :: [(Int,[Vertex])]
@@ -307,9 +307,13 @@ minimize tg@(g,t) = ((g',t'), m)
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
 minimize' (graph, tagging) =
     do g <- mkGFromGraph graph
+       let b :: FiniteMap Rank [Vertex]
+           b = addListToFM_C (\old new -> new++old) emptyFM
+                             [(r,[x]) | (x,(_,r)) <- assocs (attrTable graph)]
        p_ <- mapM (\(r,vs) -> do ref <- newSTRef [vs]; return (r,ref))
                   (fmToList b)
-       let p = listToFM p_
+       let -- p :: P st
+           p = listToFM p_
        case lookupFM b Nothing of
            Nothing -> return ()
            Just xs@(x:_) ->
@@ -325,11 +329,6 @@ minimize' (graph, tagging) =
                   mapM_ f di
        mapM_ loop (fmToList (delFromFM p Nothing))
        return g
-    where rankT :: Table Rank
-          rankT = rankTable graph
-          b :: FiniteMap Rank [Vertex]
-          b = addListToFM_C (\old new -> new++old) emptyFM
-                            [(r,[x]) | (x,r) <- assocs rankT]
 
 divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
 divideRank0 tagging ps = eltsFM fm
