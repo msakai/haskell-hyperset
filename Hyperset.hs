@@ -139,9 +139,8 @@ member (Right (Set sys1 v1)) (Set sys2 v2) =
     where (sys,in1,in2) = mergeSystem sys1 sys2
           g = sysGraph sys
 
-_subsetOf, subsetOf, supersetOf, properSubsetOf, properSupersetOf
-    :: Ord u => Set u -> Set u -> Bool
 
+_subsetOf :: Ord u => Set u -> Set u -> Bool
 s `_subsetOf` _ | isEmptySet s = True
 (Set sys1 v1) `_subsetOf` (Set sys2 v2) =
     all (\x -> (in1!x) `FS.elementOf` ys) (g1 ! v1)
@@ -151,19 +150,23 @@ s `_subsetOf` _ | isEmptySet s = True
           ys = FS.mkSet (map (in2!) (g2 ! v2))
 
 -- |Is this a subset?
--- (@s1 `subsetOf` s2@) tells whether s1 is a subset of s2.
-as `subsetOf`   bs = cardinality as <= cardinality bs && as `_subsetOf` bs
+-- (s1 `subsetOf` s2) tells whether s1 is a subset of s2.
+subsetOf :: Ord u => Set u -> Set u -> Bool
+as `subsetOf` bs = cardinality as <= cardinality bs && as `_subsetOf` bs
 
 -- |Is this superset?
--- (@s1 `supersetOf` s2@) tells whether s1 is a superset of s2.
+-- (s1 `supersetOf` s2) tells whether s1 is a superset of s2.
+supersetOf :: Ord u => Set u -> Set u -> Bool
 as `supersetOf` bs = bs `subsetOf` as
 
 -- |Is this a proper subset?
--- (@s1 `propertSubsetOf` s2@) tells whether s1 is a proper subset of s2.
-as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
+-- (s1 `propertSubsetOf` s2) tells whether s1 is a proper subset of s2.
+properSubsetOf :: Ord u => Set u -> Set u -> Bool
+as `properSubsetOf` bs = cardinality as < cardinality bs && as `_subsetOf` bs
 
 -- |Is this a proper subset?
--- (@s1 `propertSupersetOf` s2@) tells whether s1 is a proper superset of s2.
+-- (s1 `propertSupersetOf` s2) tells whether s1 is a proper superset of s2.
+properSupersetOf :: Ord u => Set u -> Set u -> Bool
 as `properSupersetOf` bs = bs `properSubsetOf` as
 
 {--------------------------------------------------------------------
