@@ -65,8 +65,8 @@ module Hyperset
     -- , mapSet
     ) where
 
-import Data.Tree
 import Data.Graph
+import Data.Tree
 import Data.Array.IArray hiding (elems)
 import qualified Data.Array.IArray as IArray
 import Data.Array.ST
@@ -153,11 +153,11 @@ member (SetElem (Set sys1 v1)) (Set sys2 v2) =
 
 _subset :: Ord u => Set u -> Set u -> Bool
 s `_subset` _ | isEmpty s = True
-(Set sys1 v1) `_subset` (Set sys2 v2) =
-    all (\x -> (in1!x) `IS.member` ys) (g1 ! v1)
+(Set sys1 v1) `_subset` (Set sys2 v2) = xs `IS.subset` ys
     where g1 = sysGraph sys1
           g2 = sysGraph sys2
           (_,in1,in2) = mergeSystem sys1 sys2
+          xs = IS.fromList (map (in1!) (g1 ! v1))
           ys = IS.fromList (map (in2!) (g2 ! v2))
 
 -- |Is this a subset?
@@ -496,26 +496,28 @@ attrTable g = table
 
 attrTable :: Graph -> Table Attr
 attrTable g = table
-    where g' = fmap IS.fromList g
-          table = array (bounds g) (concatMap f (scc g))
-          f scc = [(x,(wf,rank)) | x <- scc']
-              where scc' = flatten scc
-                    wf = case scc' of
-                         [x] | g!x == [x] -> False
+    where table = array (bounds g)
+                  [(x,(wf,rank)) | (xs,wf,rank) <- sccInfo, x <- IS.toList xs]
+          gS = fmap IS.fromList g
+          sccInfo = map f (scc g)
+          f scc = (sccS, wf, rank)
+              where sccL = flatten scc
+                    sccS = IS.fromList sccL
+                    wf = case sccL of
+                         [x] | x `IS.member` (gS!x) -> False
                              | otherwise  ->
                                  and [wf | ch <- g!x, let (wf,_) = table!ch]
                          _ -> False
-                    rank = case scc' of
+                    rank = case sccL of
                            [x] | null (g!x) -> Rank 0
                            _   | IS.isEmpty children -> RankNegInf
                                | otherwise ->
                                    maximum
-                                   [r' | ch <- IS.toList children
+                                   [ if wf then succRank r else r
+                                   | ch <- IS.toList children
                                    , let (wf,r) = table ! ch
-                                         r' = if wf then succRank r else r
                                    ]
-                        where children = IS.unions (map (g'!) scc')
-                                         `IS.difference` IS.fromList scc'
+                    children = IS.unions (map (gS!) sccL) `IS.difference` sccS
 
 -----------------------------------------------------------------------------
 
