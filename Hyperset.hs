@@ -60,16 +60,13 @@ fsIsSingleton :: (Ord a) => FS.Set a -> Bool
 fsIsSingleton x = FS.cardinality x == 1
 
 {-# INLINE fsSplit #-}
--- fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> Maybe (FS.Set a, FS.Set a)
--- とするのが自然だけど、この関数はボトルネックなので、
--- unboxed tuple が使われることを期待してタプルで返している
-fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> (Bool, FS.Set a, FS.Set a)
+fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> Maybe (FS.Set a, FS.Set a)
 fsSplit x splitter = seq x $ seq splitter $
       if isize == 0
-      then (False, undefined, undefined)
+      then Nothing
       else if isize == FS.cardinality x
-           then (False, undefined, undefined)
-           else (True, i, x `FS.minusSet` i)
+           then Nothing
+           else Just (i, x `FS.minusSet` i)
     where i = x `FS.intersect` splitter
           isize = FS.cardinality i
 
@@ -443,8 +440,8 @@ refine g p rank v =
                         | fsIsSingleton p = p : ps
                         | otherwise =
                             case fsSplit p parents of
-                            (True,a,b) -> a : b : ps
-                            _          -> p : ps
+                            Just (a,b) -> a : b : ps
+                            Nothing    -> p : ps
 
 -----------------------------------------------------------------------------
 
@@ -520,15 +517,15 @@ stabilize g b xs =
                     loop ss [] qs     = ss
                     loop ss ps []     = ss ++ ps
                     loop ss ps (q:qs) = case foldl phi (ss,[],qs) ps of
-					(ss',ps',qs') -> loop ss' ps' qs'
+                                        (ss',ps',qs') -> loop ss' ps' qs'
                         where splitter = FS.unionManySets
                                            (map (table!) (FS.setToList q))
                               phi (ss,ps,qs) p
                                   | fsIsSingleton p = (p:ss, ps, qs)
                                   | otherwise =
                                       case fsSplit p splitter of
-                                      (True,a,b) -> (ss, a:b:ps, a:b:qs)
-                                      _          -> (ss, p:ps, qs)
+                                      Just (a,b) -> (ss, a:b:ps, a:b:qs)
+                                      Nothing    -> (ss, p:ps, qs)
 
 -----------------------------------------------------------------------------
 
