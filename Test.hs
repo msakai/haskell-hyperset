@@ -28,12 +28,10 @@ testSolve :: Bool
 testSolve = solutions!0 /= solutions!1
     where solutions = solve eqns
           eqns = array (0,1)
-                 [ (0, fromList [ Right emptySet
-                                , Right (fromList [Left $ Left 0])
+                 [ (0, fromList [ Right (fromList [Left $ Left 0])
                                 , Right (fromList [Left $ Left 0, Left $ Left 1])
                                 ])
-                 , (1, fromList [ Right emptySet
-                                , Right (fromList [Left $ Left 0, Left $ Left 1])
+                 , (1, fromList [ Right (fromList [Left $ Left 0, Left $ Left 1])
                                 ] )
                  ]
 
