@@ -403,8 +403,6 @@ collapseList g (x:xs) = foldM (collapse g) x xs
 type Partition = FS.Set Vertex
 type P st = FiniteMap Rank (STRef st [Partition])
 
--- この関数がボトルネックになってる
--- メモリと実行時間の68%をこの関数が消費
 refine :: G st -> [(Rank, STRef st [Partition])] -> Rank -> Vertex -> ST st ()
 refine g p rank v =
     do (_,vs) <- apply' g v
@@ -412,11 +410,14 @@ refine g p rank v =
     where -- phi :: FS.Set Vertex -> (Rank, STRef st [Partition]) -> ST st ()
           phi vs (i,ref)
               | i <= rank = return ()
-              | otherwise = modifySTRef ref (concatMap f)
-              where f p | fsIsSingleton p = [p]
+              | otherwise = modifySTRef ref (foldr phi [])
+              where phi p ps
+                        | fsIsSingleton p = p : ps
                         | otherwise =
-                             [x | x <- [a,b], not (FS.isEmptySet x)]
-                        where (a,b) = fsSplit p vs
+                            case fsSplit p vs of
+                            (a,b) | FS.isEmptySet a ||
+                                    FS.isEmptySet b -> p : ps
+                                  | otherwise -> a : b : ps
 
 -----------------------------------------------------------------------------
 
