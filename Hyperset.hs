@@ -288,7 +288,7 @@ constructSet tg v = Set sys (m!v)
 
 -- |System of equations in X is a family of family of equations
 -- {x = a_x | x∈X}, exactly one equation for each indeterminant
--- x∈X⊆@Var@.
+-- x∈X⊆'Var'.
 type SystemOfEquations u = Array Var (Set (Either u Var))
 
 -- |Indeterminant in system of equation.
@@ -460,14 +460,15 @@ attrTable g = table
           f (CyclicSCC xs) = [(x, (wf, rank x)) | x<-xs]
               where wf     = False
                     rank x = h x xs
-          h x xs
-              | null (g!x)       = Rank 0
+          h x scc
+              | null (g!x)    = Rank 0
               | IS.isEmpty ms = RankNegInf
               | otherwise =
                   foldl1 max [r' | ch <- IS.toList ms
                               , let (wf,r) = table ! ch
                                     r'     = if wf then succRank r else r]
-              where ms = IS.fromList (concatMap (g!) xs) `IS.difference` IS.fromList xs
+              where ms = IS.fromList (concatMap (g!) scc) `IS.difference`
+                         IS.fromList scc
 
 -----------------------------------------------------------------------------
 
@@ -519,12 +520,9 @@ refine g p rank v =
                                return (xs `IS.difference` splitter)
               where splitter = xs `IS.intersection` bi                 
                     splitterSize = IS.size splitter
-                    phi p ps
-                        | fsIsSingleton p = p : ps
-                        | otherwise =
-                            case fsSplit p splitter of
-                            Just (a,b) -> a : b : ps
-                            Nothing    -> p : ps
+                    phi p ps = case splitIntSet p splitter of
+                               Just (a,b) -> a : b : ps
+                               Nothing    -> p : ps
 
 -----------------------------------------------------------------------------
 
@@ -588,48 +586,42 @@ stabilize g b xs =
                        return (x, parents `IS.intersection` b)) b'
        let table :: Array Vertex (IS.IntSet)
            table = array (head b', last b') tmp
-                   -- setToList の結果はソートされているので、
+                   -- IS.toAscList の結果はソートされているので、
                    -- headとlastで最小元と最大元が得られる
            ys  = f table (IS.size b) xs
        return ys
     where f :: Array Vertex (IS.IntSet) -> Int -> [Block] -> [Block]
-          f table bsize xs = loop [] xs xs
-              where loop :: [Block] -> [Block] -> [Block] -> [Block]
-                    loop ss [] _  = ss
-                    loop ss ps [] = ss ++ ps
-                    loop ss ps (q:qs)
+          f table bsize xs = loop xs xs
+              where loop :: [Block] -> [Block] -> [Block]
+                    loop [] _  = []
+                    loop ps [] = ps
+                    loop ps (q:qs)
                         | splitterSize == 0 ||
                           splitterSize == bsize
-                            = loop ss ps qs
+                            = loop ps qs
                         | otherwise =
-                            case foldl phi (ss,[],qs) ps of
-                            (ss',ps',qs') -> loop ss' ps' qs'
+                            case foldl phi ([],qs) ps of
+                            (ps',qs') -> loop ps' qs'
                         where splitter = IS.unions (map (table!) (IS.toList q))
                               splitterSize = IS.size splitter
-                              phi (ss,ps,qs) p
-                                  | fsIsSingleton p = (p:ss, ps, qs)
-                                  | otherwise =
-                                      case fsSplit p splitter of
-                                      Just (a,b) -> (ss, a:b:ps, a:b:qs)
-                                      Nothing    -> (ss, p:ps, qs)
+                              phi (ps,qs) p = 
+                                  case splitIntSet p splitter of
+                                  Just (a,b) -> (a:b:ps, a:b:qs)
+                                  Nothing    -> (p:ps, qs)
 
 {--------------------------------------------------------------------
   Utility functions
 --------------------------------------------------------------------}
 
-{-# INLINE fsIsSingleton #-}
-fsIsSingleton :: IS.IntSet -> Bool
-fsIsSingleton x = IS.size x == 1
-
-{-# INLINE fsSplit #-}
-fsSplit :: IS.IntSet -> IS.IntSet -> Maybe (IS.IntSet, IS.IntSet)
-fsSplit x splitter = seq x $ seq splitter $
-      if isize == 0
-      then Nothing
-      else if isize == IS.size x
-           then Nothing
-           else Just (i, x `IS.difference` i)
-    where i = x `IS.intersection` splitter
+{-# INLINE splitIntSet #-}
+splitIntSet :: IS.IntSet -> IS.IntSet -> Maybe (IS.IntSet, IS.IntSet)
+splitIntSet x splitter
+    | xsize < 2      = Nothing
+    | isize == 0     = Nothing
+    | isize == xsize = Nothing
+    | otherwise      = Just (i, x `IS.difference` i)
+    where xsize = IS.size x
+          i     = x `IS.intersection` splitter
           isize = IS.size i
 
 nubAndSort :: [Int] -> [Int]
