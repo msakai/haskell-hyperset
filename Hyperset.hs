@@ -79,6 +79,7 @@ import Control.Monad.ST (runST, ST)
 --------------------------------------------------------------------}
 infixl 9 \\
 
+-- | See 'difference'.
 (\\) :: Ord u => Set u -> Set u -> Set u
 s1 \\ s2 = s1 `difference` s2
 
@@ -86,10 +87,10 @@ s1 \\ s2 = s1 `difference` s2
   Set type
 --------------------------------------------------------------------}
 
--- |Set with extra urelements from @u@.
+-- |Set with urelements from @u@.
 data Ord u => Set u = Set !(System u) !Vertex
 
--- |Extra urelemnt or set.
+-- |Urelemnt or set.
 type UrelemOrSet u = Either u (Set u)
 
 instance Ord u => Eq (Set u) where
@@ -154,22 +155,22 @@ s `_subset` _ | isEmpty s = True
           ys = FS.mkSet (map (in2!) (g2 ! v2))
 
 -- |Is this a subset?
--- (s1 `subset` s2) tells whether s1 is a subset of s2.
+-- @(s1 \`subset\` s2)@ tells whether s1 is a subset of s2.
 subset :: Ord u => Set u -> Set u -> Bool
 as `subset` bs = cardinality as <= cardinality bs && as `_subset` bs
 
 -- |Is this superset?
--- (s1 `superset` s2) tells whether s1 is a superset of s2.
+-- @(s1 \`superset\` s2)@ tells whether s1 is a superset of s2.
 superset :: Ord u => Set u -> Set u -> Bool
 as `superset` bs = bs `subset` as
 
 -- |Is this a proper subset?
--- (s1 `propertSubsetOf` s2) tells whether s1 is a proper subset of s2.
+-- @(s1 \`properSubset\` s2)@ tells whether s1 is a proper subset of s2.
 properSubset :: Ord u => Set u -> Set u -> Bool
 as `properSubset` bs = cardinality as < cardinality bs && as `_subset` bs
 
 -- |Is this a proper subset?
--- (s1 `propertSupersetOf` s2) tells whether s1 is a proper superset of s2.
+-- @(s1 \`properSuperset\` s2)@ tells whether s1 is a proper superset of s2.
 properSuperset :: Ord u => Set u -> Set u -> Bool
 as `properSuperset` bs = bs `properSubset` as
 
