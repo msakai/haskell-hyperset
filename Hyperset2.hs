@@ -240,7 +240,7 @@ type G st = STArray st Vertex (Either Vertex (FS.Set Vertex))
 
 mkGFromGraph :: Graph -> ST st (G st)
 mkGFromGraph g =
-    newListArray (bounds g) [Right (FS.mkSet e) | e <- elems g]
+    newListArray (bounds g) [Right (FS.mkSet e) | e <- elems (transposeG g)]
 
 apply :: G st -> Vertex -> ST st Vertex
 apply g x = do (x',_) <- apply' g x
@@ -250,11 +250,11 @@ apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex)
 apply' g x =
     do y' <- readArray g x
        case y' of
-          Right children -> return (x,children)
+          Right parents -> return (x,parents)
           Left y ->
-              do (z,children) <- apply' g y
+              do (z, parents) <- apply' g y
                  unless (y==z) (writeArray g x (Left z))
-                 return (z,children)
+                 return (z, parents)
 
 collapse :: G st -> Vertex -> Vertex -> ST st Vertex
 collapse g a' b' =
@@ -263,7 +263,7 @@ collapse g a' b' =
        if a==b
           then return a
           else do writeArray g a' (Left b')
-                  writeArray g b' (Right (as `FS.union` bs)) -- 不要?
+                  writeArray g b' (Right (as `FS.union` bs))
                   return b'
 
 collapseList :: G st -> [Vertex] -> ST st Vertex
@@ -276,28 +276,15 @@ type Partition = [Vertex]
 type P st = FiniteMap Rank (STRef st [Partition])
 
 refine :: G st -> P st -> Rank -> Vertex -> ST st ()
-refine g p r v = mapM_ phi (fmToList p)
-    where -- phi :: (Rank, STRef st [Partition]) -> ST st ()
-          phi (k,ref)
+refine g p r v =
+    do (_,vs) <- apply' g v
+       mapM_ (phi vs) (fmToList p)
+    where -- phi :: FS.Set Vertex -> (Rank, STRef st [Partition]) -> ST st ()
+          phi vs (k,ref)
               | k <= r    = return ()
-              | otherwise = do ps <- readSTRef ref
-                               ps' <- foldM psi [] ps
-                               writeSTRef ref ps'
-              where -- psi :: [Partition] -> Partition -> ST a [Partition]
-                    psi ps p =
-                        do (pa,pb) <- partitionM f p
-                           return ([x | x <- [pa,pb], not (null x)] ++ ps)
-                    -- f :: forall a. Vertex -> ST a Bool
-                    f x = do (_,children) <- apply' g x
-                             children'<- mapM (apply g) (FS.setToList children)
-                             return (v `elem` children') -- XXX
-
-partitionM :: (Monad m) => (a -> m Bool) -> [a] -> m ([a],[a])
-partitionM f = foldM g ([],[])
-    where g (a,b) x = do t <- f x
-                         if t
-                            then return (x:a,b)
-                            else return (a,x:b)
+              | otherwise = modifySTRef ref (concatMap f)
+              where f p = [x | x <- [pa,pb], not (null x)]
+                        where (pa,pb) = partition (`FS.elementOf` vs) p
 
 -----------------------------------------------------------------------------
 
@@ -340,8 +327,6 @@ minimize' (graph, tagging) =
        return g
     where rankT :: Table Rank
           rankT = rankTable graph
-          maxRank :: Rank
-          maxRank = foldl max Nothing (elems rankT)
           b :: FiniteMap Rank [Vertex]
           b = addListToFM_C (\old new -> new++old) emptyFM
                             [(r,[x]) | (x,r) <- assocs rankT]
