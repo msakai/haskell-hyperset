@@ -65,8 +65,10 @@ module Hyperset
     -- , mapSet
     ) where
 
-import Data.Graph
-import Data.Tree
+import Data.Graph (Graph,Vertex,Table)
+import qualified Data.Graph as Graph (scc)
+import Data.Tree (Tree)
+import qualified Data.Tree as Tree (flatten)
 import Data.Array.IArray hiding (elems)
 import qualified Data.Array.IArray as IArray
 import Data.Array.ST
@@ -186,7 +188,10 @@ as `properSuperset` bs = bs `properSubset` as
 
 -- |Quine atom: x={x}.
 quineAtom :: Ord u => Set u
-quineAtom = constructSet (listArray (0,0) [[0]], emptyFM) 0
+quineAtom = constructSet2 ( listArray (0,0) [[0]]
+                          , emptyFM
+                          , listArray (0,0) [(False,RankNegInf)]
+                          ) 0
 
 -- |The empty set.
 empty :: Ord u => Set u
@@ -199,13 +204,19 @@ singleton u = fromList [u]
 -- XXX: 汚いなぁ
 -- |The powerset of the set.
 powerset :: Ord u => Set u -> Set u
-powerset (Set sys v) = constructSet (g',t) v'
+powerset (Set sys v) = constructSet2 (g',t,attrs') v'
     where g = sysGraph sys
           t = sysTagging sys
+          attrs = sysAttrTable sys
           (lb,ub) = bounds g
           v' = ub + length p + 1
           p  = zip [(ub+1)..] (powerList (g!v))
           g' = array (lb, v') ((v', map fst p) : p ++ assocs g)
+          attrs' = array (lb, v') $
+                     (v', attrOfSetFromElemAttrs (map ((attrs'!) . fst) p)) :
+                     [(i, attrOfSetFromElemAttrs (map (attrs!) children))
+                     | (i,children) <- p ]
+                     ++ assocs attrs
 
 -- Mark Jones' powerSet
 -- http://www.haskell.org/pipermail/haskell-cafe/2003-June/004484.html
@@ -218,7 +229,7 @@ powerList = foldr phi [[]]
 -- XXX: 汚いなぁ
 -- |The union of two sets.
 union :: Ord u => Set u -> Set u -> Set u
-union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
+union (Set sys1 v1) (Set sys2 v2) = constructSet2 (g,t,a) v
     where g1 = sysGraph sys1
           g2 = sysGraph sys2
           (lb1,ub1) = bounds g1
@@ -233,6 +244,10 @@ union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
           t = t1 `addListToFM` [(v+off,u) | (v,u) <- fmToList t2]
               where t1 = sysTagging sys1
                     t2 = sysTagging sys2
+          a = array (lb1,v) l
+              where l = (v, attrOfSetFromElemAttrs (map (attrs1!) (g1!v1) ++ map (attrs2!) (g2!v2))) : [(i+off, a) | (i,a) <- assocs attrs2] ++ assocs attrs1
+                    attrs1 = sysAttrTable sys1
+                    attrs2 = sysAttrTable sys2
 
 -- unionManySets :: Ord u => Set u -> Set u
 
@@ -248,13 +263,18 @@ a `difference` b = separate (\x -> not (x `member` b)) a
 
 -- |The quotient set by the equivalent relation.
 equivClass :: Ord u => (Elem u -> Elem u -> Bool) -> (Set u -> Set u)
-equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
+equivClass f (Set sys v) = constructSet2 (g', sysTagging sys, a) v'
     where f' a b = f (toElem sys a) (toElem sys b)
           g = sysGraph sys
           l = zip [ub+1..] (classifyList f' (g ! v))
           (lb,ub) = bounds (sysGraph sys)
           v' = ub + length l + 1
           g' = array (lb, v') ((v', map fst l) : l ++ assocs g)
+          a  = array (lb, v') $
+                 (v', attrOfSetFromElemAttrs [a!i | (i,_) <- l]) :
+                 [(i, attrOfSetFromElemAttrs [attrs!ch | ch <- children])
+                  | (i,children) <- l] ++ assocs attrs
+              where attrs = sysAttrTable sys
 
 classifyList :: (a -> a -> Bool) -> [a] -> [[a]]
 classifyList f = foldl phi []
@@ -264,31 +284,32 @@ classifyList f = foldl phi []
 
 -- |Filter all elements that satisfy the predicate.
 separate :: Ord u => (Elem u -> Bool) -> (Set u -> Set u)
-separate f (Set sys v) =
-    constructSet (g',t) v'
+separate f (Set sys v) = constructSet2 (g',t,a') v'
     where g = sysGraph sys
           t = sysTagging sys
+          a = sysAttrTable sys
           (lb,ub) = bounds g
-          g'  = array (lb,ub+1) (foo : assocs g)
-              where foo = (v', [child | child <- g!v, f (toElem sys child)])
-          v'  = ub+1
+          g' = array (lb,ub+1) ((v', children) : assocs g)
+          children = [ch | ch <- g!v, f (toElem sys ch)]
+          v' = ub+1
+          a' = array (lb,ub+1)
+                 ((v', attrOfSetFromElemAttrs (map (a!) children)) : assocs a)
 
 -- partition :: Ord u => (Elem u -> Bool) -> Set u -> (Set u, Set u)
-
-{-
-mapSet :: (Ord u, Ord u') => (Elem u -> Elem u') -> (Set u -> Set u')
-mapSet f = fromList . map f . toList
--}
-
 
 toElem :: Ord u => System u -> Vertex -> Elem u
 toElem sys v = case lookupFM (sysTagging sys) v of
                Just e  -> Urelem e
                Nothing -> SetElem (Set sys v)
 
+{-
 constructSet :: Ord u => TaggedGraph u -> Vertex -> Set u
-constructSet tg v = Set sys (m!v)
-    where (sys,m) = mkSystem tg
+constructSet (g,t) v = constructSet2 (g,t,attrTable g) v
+-}
+
+constructSet2 :: Ord u => TAGraph u -> Vertex -> Set u
+constructSet2 g v = Set sys (m!v)
+    where (sys,m) = mkSystem2 g
 
 {--------------------------------------------------------------------
   System of equation
@@ -388,17 +409,26 @@ toList (Set sys v) = map (toElem sys) (sysGraph sys ! v)
 
 -- |Create a set from a list of elements.
 fromList :: Ord u => [Elem u] -> Set u
-fromList xs = constructSet (array (0,n) ((n,children):l), t) n
-    where ((n,l,t), children) = mapAccumL phi (0,[],emptyFM) xs
-          phi (n,l,t) (Urelem u) =
-              ((n+1, (n,[]):l, addToFM t n u), n)
-          phi (n,l,t) (SetElem (Set sys v)) =
-              ((ub+off+1, l'++l, addListToFM t t'), v+off)
+fromList xs = constructSet2 ( array (0,n) ((n, children) : l)
+                            , t
+                            , array (0,n) ((n, attrOfSetFromElems xs) : a)
+                            ) n
+    where ((n,l,t,a), children) = mapAccumL phi (0,[],emptyFM,[]) xs
+          phi (n,l,t,a) (Urelem u) =
+              ( (n+1, (n,[]):l, addToFM t n u, (n, (True,Rank 0)) : a)
+              , n
+              )
+          phi (n,l,t,a) (SetElem (Set sys v)) =
+              ( (ub+off+1, l'++l, addListToFM t t', a')
+              , v+off
+              )
               where (lb,ub) = bounds (sysGraph sys)
                     off = n - lb
                     l'  = [(v+off, [ch+off | ch <- children])
                            | (v,children) <- assocs (sysGraph sys)]
                     t'  = [(v+off,u) | (v,u) <- fmToList (sysTagging sys)]
+                    a'  = [(i+off,x) | (i,x) <- assocs (sysAttrTable sys)]
+                          ++ a
 
 {--------------------------------------------------------------------
   Implementation
@@ -406,20 +436,31 @@ fromList xs = constructSet (array (0,n) ((n,children):l), t) n
 
 type TaggedGraph u = (Graph, Tagging u)
 
+-- type AGraph u = Array Int (IS.IntSet, Attr)
+
 data System u =
     System
     { sysGraph        :: !Graph
     , sysTagging      :: !(Tagging u)
-    , sysAttrTable    :: (Table Attr)
+    , sysAttrTable    :: Table Attr
     }
 
 mkSystem :: Ord u => TaggedGraph u -> (System u, Table Vertex)
 mkSystem (g,t) = (sys, m)
-    where ((g',t'),m) = minimize (g,t)
+    where ((g',t'),attrs,m) = minimize (g,t)
           sys = System
                 { sysGraph      = g'
                 , sysTagging    = filterFM (\v _ -> null (g' ! v)) t'
-                , sysAttrTable  = attrTable g'
+                , sysAttrTable  = attrs
+                }
+
+mkSystem2 :: Ord u => TAGraph u -> (System u, Table Vertex)
+mkSystem2 g = (sys, m)
+    where ((g',t',attrs), m) = minimizeTAGraph g
+          sys = System
+                { sysGraph      = g'
+                , sysTagging    = filterFM (\v _ -> null (g' ! v)) t'
+                , sysAttrTable  = attrs
                 }
 
 mergeSystem :: Ord u => System u -> System u ->
@@ -461,49 +502,16 @@ succRank :: Rank -> Rank
 succRank (Rank n)   = Rank (n+1)
 succRank RankNegInf = RankNegInf
 
-{-
-attrTable :: Graph -> Table Attr
-attrTable g = table
-    where table = array (bounds g) (concatMap f (IArray.elems tmp))
-              where f (scc,wf,rank) = [(x,(wf,rank)) | x <- IS.toList scc]
-          sccs = scc g
-          tmp1 :: Table Vertex
-          tmp1 = array (bounds g) [(x,n) | (n,scc) <- zip [0..] sccs, x <- flatten scc]
-          tmp :: Array Int (IS.IntSet, Bool, Rank)
-          tmp = array (0, length sccs - 1) (map f (zip [0..] sccs))
-              where f (n,scc) = (n, (sccS, wf, rank))
-                     where sccL = flatten scc
-                           sccS = IS.fromList sccL
-                           sccChildren = IS.toList . IS.delete n . IS.unions .
-                                         map (IS.fromList . map (tmp1!) . (g!))
-                                         $ sccL
-                           wf = case sccL of
-                                [x] | g!x==[x]  -> False
-                                    | otherwise ->
-                                        and [ wf | ch <- sccChildren
-                                            , let (_,wf,_) = tmp!ch ]
-                                _ -> False
-                           rank = case sccL of
-                                  [x] | null (g!x) -> Rank 0
-                                  _ | null sccChildren -> RankNegInf
-                                    | otherwise ->
-                                        maximum (map f sccChildren)
-                                    where f ch = if wf
-                                                 then succRank r
-                                                 else r
-                                              where (_,wf,r) = tmp!ch
--}
-
 attrTable :: Graph -> Table Attr
 attrTable g = table
     where table = array (bounds g)
                   [(x,(wf,rank)) | (xs,wf,rank) <- sccInfo, x <- IS.toList xs]
           gS = fmap IS.fromList g
           sccInfo :: [(IS.IntSet, Bool, Rank)]
-          sccInfo = map f (scc g)
+          sccInfo = map f (Graph.scc g)
           f :: Tree Vertex -> (IS.IntSet, Bool, Rank)
-          f scc = (sccS, wf, rank)
-              where sccL = flatten scc
+          f sccT = (sccS, wf, rank)
+              where sccL = Tree.flatten sccT
                     sccS = IS.fromList sccL
                     wf = case sccL of
                          [x] | x `IS.member` (gS!x) -> False
@@ -521,73 +529,101 @@ attrTable g = table
                                    ]
                     children = IS.unions (map (gS!) sccL) `IS.difference` sccS
 
+
+attrOfElem :: Ord u => Elem u -> Attr
+attrOfElem (Urelem _) = (True, Rank 0)
+attrOfElem (SetElem (Set sys v)) = sysAttrTable sys ! v
+
+attrOfSetFromElems :: Ord u => [Elem u] -> Attr
+attrOfSetFromElems = attrOfSetFromElemAttrs . map attrOfElem
+
+-- 要素のAttrから集合のAttrを計算
+attrOfSetFromElemAttrs :: [Attr] -> Attr
+attrOfSetFromElemAttrs [] = (True, Rank 0)
+attrOfSetFromElemAttrs xs = foldl phi (True,RankNegInf) xs
+    where phi (wf,rank) a = case f a of
+                            (wf1,rank1) -> (wf && wf1, rank `max` rank1)
+          f (True,rank)  = (True,  succRank rank)
+          f (False,rank) = (False, rank)
+
 -----------------------------------------------------------------------------
 
 type Block = IS.IntSet
 type Partition = [Block]
 
-type G st = STArray st Vertex (Either Vertex (FiniteMap Rank IS.IntSet, IS.IntSet))
-
-mkG :: Graph -> Table Attr -> ST st (G st)
-mkG g table =
-    newListArray (bounds g) [Right (f parents, IS.single v)
-                             | (v, parents) <- assocs (transposeG g)]
-    where f xs = addListToFM_C IS.union emptyFM
-                 [(rank, IS.single x) | x <- xs, let (_,rank) = table!x]
+type CellInfo =
+    ( FiniteMap Rank IS.IntSet
+    , IS.IntSet
+    , Attr
+    )
 
 {-
-mkG :: Graph -> [(Rank,IS.IntSet)] -> ST st (G st)
-mkG g foo =
-    newListArray (bounds g) [Right (f parents, IS.single v)
-                             | (v, parents) <- assocs (transposeG g)]
-    where f xs = listToFM $ cla foo (IS.fromList xs)
-
-cla :: [(Rank, IS.IntSet)] -> IS.IntSet -> [(Rank, IS.IntSet)]
-cla table xs = f table xs
-    where f [] _ = []
-          f ((rank,b):ts) xs
-              | IS.isEmpty xs = []
-              | IS.isEmpty i  = f ts xs'
-              | otherwise     = (rank,i) : (f ts xs')
-              where i   = xs `IS.intersection` b
-                    xs' = xs `IS.difference` i
+data Cell
+    = Redirect !Vertex
+    | Cell !CellInfo
 -}
 
-getNodeInfo :: G st -> Vertex -> ST st (Vertex, FiniteMap Rank IS.IntSet, IS.IntSet)
+type CollapsingTable      = Array Vertex (Either Vertex CellInfo)
+type STCollapsingTable st = STArray st Vertex (Either Vertex CellInfo)
+
+type PreimageMap = FiniteMap Rank IS.IntSet
+
+mkSTCollapsingTable :: Graph -> Table Attr -> ST st (STCollapsingTable st)
+mkSTCollapsingTable g table =
+    do t <- mkPreimageTable g table >>= unsafeFreeze
+       let t_ :: Array Vertex PreimageMap
+           t_ = t
+       newListArray (bounds g) [ Right (t!v, IS.single v, table!v)
+                               | v <- indices g ]
+
+mkPreimageTable :: Graph -> Table Attr -> ST st (STArray st Vertex PreimageMap)
+mkPreimageTable g t =
+    do table <- newListArray (bounds g) (repeat emptyFM)
+       flip mapM_ (assocs g) $ \(v,children) ->
+            do let (wf,rank) = t!v
+                   v' = IS.single v
+               flip mapM_ children $ \ch ->
+                   do fm <- readArray table ch
+                      let fm' = addToFM_C IS.union fm rank v'
+                      writeArray table ch fm'
+       return table
+
+getNodeInfo :: STCollapsingTable st -> Vertex -> ST st (Vertex, FiniteMap Rank IS.IntSet, IS.IntSet, Attr)
 getNodeInfo g x =
     do y <- readArray g x
        case y of
-          Right (parents,vs) -> return (x,parents,vs)
+          Right (parents,vs,attr) -> return (x,parents,vs,attr)
           Left y1 -> getNodeInfo g y1
 
-getParents :: G st -> Vertex -> ST st (FiniteMap Rank IS.IntSet)
+getParents :: STCollapsingTable st -> Vertex -> ST st (FiniteMap Rank IS.IntSet)
 getParents g v =
-    do (_,parents,_) <- getNodeInfo g v
+    do (_,parents,_,_) <- getNodeInfo g v
        return parents
 
-collapse :: G st -> Vertex -> Vertex -> ST st Vertex
+collapse :: STCollapsingTable st -> Vertex -> Vertex -> ST st Vertex
 collapse g a' b' =
-    do (a,pas,as) <- getNodeInfo g a'
-       (b,pbs,bs) <- getNodeInfo g b'
+    do (a,pas,as,attr) <- getNodeInfo g a'
+       (b,pbs,bs,_)    <- getNodeInfo g b'
        if a==b
           then return a
           else do writeArray g a $ Right ( plusFM_C IS.union pas pbs
                                          , as  `IS.union` bs
+                                         , attr
                                          )
                   let redirect = Left a
                   mapM_ (\b -> writeArray g b redirect) (IS.toList bs)
                   return a
 
-collapseList :: G st -> [Vertex] -> ST st Vertex
+collapseList :: STCollapsingTable st -> [Vertex] -> ST st Vertex
 collapseList _ []     = return undefined
 collapseList g (x:xs) = foldM (collapse g) x xs
 
-collapseBlock :: G st -> Block -> ST st Vertex
+collapseBlock :: STCollapsingTable st -> Block -> ST st Vertex
 collapseBlock g b = collapseList g (IS.toList b)
 
 -----------------------------------------------------------------------------
 
-refine :: G st -> [(Rank, (STRef st Partition, Block))] -> Vertex -> ST st ()
+refine :: STCollapsingTable st -> [(Rank, (STRef st Partition, Block))] -> Vertex -> ST st ()
 refine g p v =
     do parents <- getParents g v
        unless (isEmptyFM parents) $
@@ -604,42 +640,48 @@ split splitter xs = foldr phi [] xs
 
 -----------------------------------------------------------------------------
 
-minimize :: Ord u => TaggedGraph u -> (TaggedGraph u, Table Vertex)
-minimize tg@(g,t) = ((g',t'), m)
-    where t' = listToFM [(m!v,u) | (v,u) <- fmToList t]
-          (m,g') = case foldl phi (0,[],[]) hoge of
-                        (size, xs, ys) ->
-                            ( array (bounds g) xs
-                            , array (0, size - 1) ys
-                            )
-             where phi (n,xs,ys) (_, Left _)       = (n, xs, ys)
-                   phi (n,xs,ys) (v, Right (_,vs)) =
+minimize :: Ord u => TaggedGraph u -> (TaggedGraph u, Table Attr, Table Vertex)
+minimize (g,t) = ((g',t'), attrs', f)
+    where ((g',t',attrs'), f) = minimizeTAGraph (g,t,attrs)
+          attrs = attrTable g
+
+type TAGraph u = (Graph, Tagging u, Table Attr)
+
+minimizeTAGraph :: Ord u => TAGraph u -> (TAGraph u, Table Vertex)
+minimizeTAGraph (g,t,attrs) = ((g',t',attrs'), f)
+    where t' = listToFM [(f!v,u) | (v,u) <- fmToList t]
+          (g',attrs',f) = mkFiltration g ct
+          ct = runST (do ct <- mkSTCollapsingTable g attrs
+                         minimize' ct t
+                         unsafeFreeze ct)
+
+mkFiltration :: Graph -> CollapsingTable -> (Graph, Table Attr, Table Vertex)
+mkFiltration g ct = (g', attrs, f)
+    where (f,attrs,g') =
+              case foldl phi (0,[],[],[]) (assocs ct) of
+              (size, xs, ys, zs) ->
+                  ( array (bounds g) xs
+                  , array (0, size - 1) ys
+                  , array (0, size - 1) zs
+                  )
+             where phi (n,xs,ys,zs) (_, Left _)            = (n,xs,ys,zs)
+                   phi (n,xs,ys,zs) (v, Right (_,vs,attr)) =
                        ( n+1
                        , [(x,n) | x <- IS.toList vs] ++ xs
-                       , (n, nubAndSort $ map (m!) (g!v)) : ys
+                       , (n, attr) : ys
+                       , (n, nubAndSort $ map (f!) (g!v)) : zs
                        )
-                   hoge = runST (do gg <- minimize' tg
-                                    assocs <- getAssocs gg
-                                    return assocs)
 
-minimize' :: Ord u => TaggedGraph u -> ST st (G st)
-minimize' (graph, tagging) =
-    do let b :: FiniteMap Rank Block
+minimize' :: Ord u => STCollapsingTable st -> Tagging u -> ST st ()
+minimize' g tagging =
+    do assocs <- getAssocs g
+       let b :: FiniteMap Rank Block
            b = addListToFM_C IS.union emptyFM
-               [(rank, IS.single x) | (x,(_,rank)) <- assocs table]
-           table = attrTable graph
-           {-
-           b = addListToFM_C IS.union emptyFM
-               [(rank,scc) | (scc,_,rank) <- info]
-           (table,info) = attrTable' graph
-           -}
+               [ (rank, IS.single x) | (x, Right (_,_,(_,rank))) <- assocs ]
        p' <- flip mapM (fmToList b) $ \(rank,block) ->
-             do ref <- newSTRef [block]
-                return (rank,(ref,block))
+               do ref <- newSTRef [block]
+                  return (rank,(ref,block))
        let p = listToFM p'
-
-       g <- mkG graph table
-       --g <- mkG graph (fmToList b)
 
        case lookupFM p (Rank 0) of
            Just (ref,b0) -> writeSTRef ref (eltsFM fm)
@@ -664,9 +706,8 @@ minimize' (graph, tagging) =
                   loop ps
        loop (fmToList (delFromFM p RankNegInf))
 
-       return g
 
-stabilize :: G st -> Rank -> Block -> Partition -> ST st Partition
+stabilize :: STCollapsingTable st -> Rank -> Block -> Partition -> ST st Partition
 stabilize g rank b blocks =
     do let b'  = IS.toAscList b
            min = head b'

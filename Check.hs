@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 
-import Hyperset
+import Hyperset hiding (elems)
 import Data.Graph
 import Data.Array
 import Data.List (sort,nub)
