@@ -32,7 +32,7 @@ genGraph = sized genGraph'
           genChildren ub x =
               do y <- choose (0,ub*2)
                  children <- sequence (take y (repeat (choose (0,ub))))
-                 return (x, sort $ nub $ children) -- FIXME
+                 return (x, children)
 
 genTagging :: (Ord u, Arbitrary u) => Graph -> Gen (Tagging u)
 genTagging g = 
@@ -84,7 +84,7 @@ prop_unionSize x y =
     cardinality y <= cardinality (x `union` y)
 
 prop_unionInclusion :: Set Int -> Set Int -> Bool
-prop_unionInclusion x y = x `isSubsetOf` z && y `isSubsetOf` z
+prop_unionInclusion x y = x `subset` z && y `subset` z
     where z = x `union` y
 
 -----------------------------------------------------------------------------
@@ -104,7 +104,7 @@ prop_intersectionSize x y  =
     cardinality (x `intersection` y) <= cardinality y
 
 prop_intersectionInclusion :: Set Int -> Set Int -> Bool
-prop_intersectionInclusion x y = z `isSubsetOf` x && z `isSubsetOf` y
+prop_intersectionInclusion x y = z `subset` x && z `subset` y
     where z = x `intersection` y
 
 -----------------------------------------------------------------------------
@@ -119,7 +119,7 @@ prop_powerset1 :: Set Int -> Property
 prop_powerset1 x =
     (cardinality x) <= 8 ==> all f (toList (powerset x))
     where f (Left _)  = False
-          f (Right z) = z `isSubsetOf` x
+          f (Right z) = z `subset` x
 
 prop_powerset2 :: Set Int -> Property
 prop_powerset2 x =

@@ -27,10 +27,10 @@ module Hyperset
     , isEmpty
     , isSingleton
     , member
-    , isSubsetOf
-    , isSupersetOf
-    , isProperSubsetOf
-    , isProperSupersetOf
+    , subset
+    , superset
+    , properSubset
+    , properSuperset
 
     -- * Construction
     , atom
@@ -69,7 +69,7 @@ import Data.Array.IArray
 import Data.Array.ST
 import Data.FiniteMap
 import qualified Data.Set as FS
-import Data.List (mapAccumL, intersperse)
+import Data.List (mapAccumL)
 import Data.STRef
 import Control.Monad (unless, foldM, mapM_, mapM)
 import Control.Monad.ST (runST, ST)
@@ -100,6 +100,7 @@ instance Ord u => Eq (Set u) where
         in1!v1 == in2!v2
         where (_,in1,in2) = mergeSystem sys1 sys2
 
+-- for debugging
 instance (Ord u, Show u) => Show (Set u) where
     showsPrec d s = showsPrec d (g, v, fmToList t)
        where (g,v,t) = picture s
@@ -143,9 +144,9 @@ member (Right (Set sys1 v1)) (Set sys2 v2) =
           g = sysGraph sys
 
 
-_isSubsetOf :: Ord u => Set u -> Set u -> Bool
-s `_isSubsetOf` _ | isEmpty s = True
-(Set sys1 v1) `_isSubsetOf` (Set sys2 v2) =
+_subset :: Ord u => Set u -> Set u -> Bool
+s `_subset` _ | isEmpty s = True
+(Set sys1 v1) `_subset` (Set sys2 v2) =
     all (\x -> (in1!x) `FS.elementOf` ys) (g1 ! v1)
     where g1 = sysGraph sys1
           g2 = sysGraph sys2
@@ -153,24 +154,24 @@ s `_isSubsetOf` _ | isEmpty s = True
           ys = FS.mkSet (map (in2!) (g2 ! v2))
 
 -- |Is this a subset?
--- (s1 `isSubsetOf` s2) tells whether s1 is a subset of s2.
-isSubsetOf :: Ord u => Set u -> Set u -> Bool
-as `isSubsetOf` bs = cardinality as <= cardinality bs && as `_isSubsetOf` bs
+-- (s1 `subset` s2) tells whether s1 is a subset of s2.
+subset :: Ord u => Set u -> Set u -> Bool
+as `subset` bs = cardinality as <= cardinality bs && as `_subset` bs
 
 -- |Is this superset?
--- (s1 `isSupersetOf` s2) tells whether s1 is a superset of s2.
-isSupersetOf :: Ord u => Set u -> Set u -> Bool
-as `isSupersetOf` bs = bs `isSubsetOf` as
+-- (s1 `superset` s2) tells whether s1 is a superset of s2.
+superset :: Ord u => Set u -> Set u -> Bool
+as `superset` bs = bs `subset` as
 
 -- |Is this a proper subset?
 -- (s1 `propertSubsetOf` s2) tells whether s1 is a proper subset of s2.
-isProperSubsetOf :: Ord u => Set u -> Set u -> Bool
-as `isProperSubsetOf` bs = cardinality as < cardinality bs && as `_isSubsetOf` bs
+properSubset :: Ord u => Set u -> Set u -> Bool
+as `properSubset` bs = cardinality as < cardinality bs && as `_subset` bs
 
 -- |Is this a proper subset?
 -- (s1 `propertSupersetOf` s2) tells whether s1 is a proper superset of s2.
-isProperSupersetOf :: Ord u => Set u -> Set u -> Bool
-as `isProperSupersetOf` bs = bs `isProperSubsetOf` as
+properSuperset :: Ord u => Set u -> Set u -> Bool
+as `properSuperset` bs = bs `properSubset` as
 
 {--------------------------------------------------------------------
   Construction
@@ -399,17 +400,6 @@ data System u =
     , sysTagging      :: !(Tagging u)
     , sysAttrTable    :: (Table Attr)
     }
-
--- for debuging
-{-
-instance (Ord u, Show u) => (Show (System u)) where
-    showsPrec d System{ sysGraph = g, sysTagging = t, sysAttrTable = attr}
-        | d == 11   = ('(':) . f . (')':)
-        | otherwise = f
-        where f = ("System "++) . (showsPrec 11 g) . (' ':)
-                  . (showsPrec 11 (fmToList t)) . (' ':)
-                  . (showsPrec 11 attr)
--}
 
 mkSystem :: Ord u => TaggedGraph u -> (System u, Table Vertex)
 mkSystem (g,t) = (sys, m)
