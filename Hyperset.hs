@@ -180,7 +180,7 @@ as `properSuperset` bs = bs `properSubset` as
 
 -- |Quine's atom: Ω={Ω}.
 atom :: Ord u => Set u
-atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
+atom = constructSet (listArray (0,0) [[0]], emptyFM) 0
 
 -- |The empty set.
 empty :: Ord u => Set u
@@ -300,8 +300,8 @@ type Solution u = Array Var (Set u)
 -- |Solve a system of equation.
 -- By the solution lemma, every system of equations has a unique solution.
 solve :: Ord u => SystemOfEquations u -> Solution u
-solve equations = array (bounds equations)
-                  [(i, Set sys (m!i)) | i <- indices equations]
+solve equations = listArray (bounds equations)
+                  [Set sys (m!i) | i <- indices equations]
     where (sys,m)  = mkSystem $ mkTaggedGraphFromEquations equations
 
 -- XXX: 汚いなぁ
@@ -361,7 +361,7 @@ type Decoration u = Table (UrelemOrSet u)
 decorate :: (Ord u) => Graph -> Tagging u -> Decoration u
 decorate g t = d
     where (sys,m) = mkSystem (g,t)
-          d = array (bounds g) [(v, toUrelemOrSet sys (m!v)) | v <- indices g]
+          d = listArray (bounds g) [toUrelemOrSet sys (m!v) | v <- indices g]
 
 -- |Tagged apg(accessible pointed graph) that pictures the set.
 picture :: (Ord u) => Set u -> (Graph, Vertex, Tagging u)
@@ -419,8 +419,8 @@ mergeSystem sys1 sys2 = (sys, in1, in2)
           (offset, lb, ub) = (ub1 + 1 - lb2, lb1, ub2+offset)
               where (lb1,ub1) = bounds g1
                     (lb2,ub2) = bounds g2
-          in1 = array (bounds g1) [(i,m!i) | i <- indices g1]
-          in2 = array (bounds g2) [(i,m!(i+offset)) | i <- indices g2]
+          in1 = listArray (bounds g1) [m!i | i <- indices g1]
+          in2 = listArray (bounds g2) [m!(i+offset) | i <- indices g2]
           (sys,m) = mkSystem (g,t)
               where g = array (lb,ub) (assocs g1 ++ [(k+offset, map (offset+) e) | (k,e) <- assocs g2])
                     t = t1 `plusFM` t2
@@ -452,23 +452,29 @@ succRank RankNegInf = RankNegInf
 
 attrTable :: Graph -> Table Attr
 attrTable g = table
-    where scc = stronglyConnComp [(x,x,ys) | (x,ys) <- assocs g]
-          table = array (bounds g) (concatMap f scc)
-          f (AcyclicSCC x) = [(x, (wf, rank))]
-              where wf   = and [x | ch <- g!x, let (x,_) = table!ch]
-                    rank = h x [x]
-          f (CyclicSCC xs) = [(x, (wf, rank x)) | x<-xs]
-              where wf     = False
-                    rank x = h x xs
-          h x scc
-              | null (g!x)    = Rank 0
-              | IS.isEmpty ms = RankNegInf
-              | otherwise =
-                  foldl1 max [r' | ch <- IS.toList ms
-                              , let (wf,r) = table ! ch
-                                    r'     = if wf then succRank r else r]
-              where ms = IS.fromList (concatMap (g!) scc) `IS.difference`
-                         IS.fromList scc
+    where sccs = stronglyConnComp [(x,x,ys) | (x,ys) <- assocs g]
+          table = array (bounds g) (concatMap f sccs)
+          f scc = [(x,(wf,rank)) | x <- scc']
+              where scc' = flattenSCC scc
+                    wf = case scc of
+                         CyclicSCC _  -> False
+                         AcyclicSCC x ->
+                             and [wf | ch <- g!x, let (wf,_) = table!ch]
+                    rank = case scc of
+                           AcyclicSCC x | null (g!x) -> Rank 0
+                                        | otherwise  -> rank'
+                           CyclicSCC xs -> rank'
+                        where rank'
+                                  | IS.isEmpty children = RankNegInf
+                                  | otherwise =
+                                      foldl1 max
+                                          [r' | ch <- IS.toList children
+                                          , let (wf,r) = table ! ch
+                                                r' = if wf then succRank r
+                                                           else r
+                                          ]
+                              children = IS.fromList (concatMap (g!) scc')
+                                         `IS.difference` IS.fromList scc'
 
 -----------------------------------------------------------------------------
 
