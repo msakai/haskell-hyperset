@@ -497,11 +497,12 @@ stabilize g b xs =
               (ss',ps',qs') -> loop preds ss' ps' qs'
               where splitter = FS.unionManySets (map (preds!) (FS.setToList q))
                     phi (ss,ps,qs) p
-                        | not (FS.isEmptySet a) && not (FS.isEmptySet b)
-                            = case partition fsIsSingleton [a,b] of
-                              (ss', ps') -> (ss'++ss, ps'++ps, a:b:qs)
-                        | otherwise = (ss, p : ps, qs)
-                        where (a,b) = fsSplit p splitter
+                        | fsIsSingleton p = (p:ss,ps,qs)
+                        | otherwise =
+                            case fsSplit p splitter of
+                            (a,b) | FS.isEmptySet a || FS.isEmptySet b ->
+                                      (ss, p : ps, qs)
+                                  | otherwise -> (ss, a:b:ps, a:b:qs)
 
 -----------------------------------------------------------------------------
 
