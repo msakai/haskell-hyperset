@@ -25,7 +25,7 @@ module Hyperset
     , singleton
     , solve
     , decorate
-    , getPicture
+    , picture
     , toList
     , fromList
     , powerset
@@ -235,8 +235,8 @@ decorate g t = d
     where (sys,m) = mkSystem (g,t)
           d = array (bounds g) [(v, toUrelemOrSet sys (m!v)) | v <- indices g]
 
-getPicture :: (Ord u) => Set u -> (Graph, Tagging u, Vertex)
-getPicture (Set sys v) = (sysGraph sys, sysTagging sys, v)
+picture :: (Ord u) => Set u -> (Graph, Tagging u, Vertex)
+picture (Set sys v) = (sysGraph sys, sysTagging sys, v)
 
 -- XXX: 汚いなぁ
 -- |The powerset of the set.
@@ -406,19 +406,6 @@ attrTable g = table
                               , let (wf,r) = table ! ch
                                     r'     = if wf then succRank r else r]
               where ms = FS.mkSet (concatMap (g!) xs) `FS.minusSet` FS.mkSet xs
-
-{-
-rankTable :: Graph -> Table Rank
-rankTable g = fmap snd (attrTable g)
-
-rankTableTest1 = a==b
-    where a = rankTable (array (0,2) [(0,[1,2]), (1,[1]), (2,[])])
-          b = array (0,2) [(0,Rank 1),(1,RankNegInf),(2,Rank 0)]
-
-rankTableTest2 = a==b
-    where a = rankTable (array (0,4) [(0,[1,2]), (1,[0]), (2,[3,4]), (3,[2]), (4,[]) ])
-          b = array (0,4) [(0,Rank 1),(1,Rank 1),(2,Rank 1),(3,Rank 1),(4,Rank 0)]
--}
 
 -----------------------------------------------------------------------------
 
