@@ -1,26 +1,196 @@
+module Hyperset2 where
+
 import Data.Graph
 import Data.Array.IArray
 import Data.Array.ST
 import Data.FiniteMap
-import Data.Set
-import Data.List hiding (union)
+import qualified Data.Set as FS
+import Data.List
 import Data.STRef
 import Control.Monad
 import Control.Monad.ST
+import Debug.Trace
+
+-----------------------------------------------------------------------------
+
+-- XXX:
+instance (Ord k, Show k, Show e) => Show (FiniteMap k e) where
+    showsPrec d fm = showsPrec d (fmToList fm)
+
+powerList :: [a] -> [[a]]
+powerList = foldr phi [[]]
+    where phi a xs = map (a:) xs ++ xs
+
+showSet :: (Show u, Ord u) => Set u -> String
+showSet s | isWellfounded s = f s
+          | otherwise = "non-wellfounded set"
+    where f s = "{" ++ concat (intersperse "," (map g (toList s))) ++ "}"
+          g (Left u)   = show u
+          g (Right s') = f s'
+
+-----------------------------------------------------------------------------
+
+data Ord u => Set u = Set !(System u) !Vertex deriving Show
+
+isWellfounded :: Ord u => Set u -> Bool
+isWellfounded (Set sys v) =
+    case (sysAttrTable sys ! v) of
+    (wf,_) -> wf
+
+cardinality :: Ord u => Set u -> Int
+cardinality (Set sys v) = length (sysGraph sys ! v)
+
+isEmptySet :: Ord u => Set u -> Bool
+isEmptySet x = cardinality x == 0
+
+isSingleton :: Ord u => Set u -> Bool
+isSingleton x = cardinality x == 1
+
+wrap :: Ord u => System u -> Vertex -> Either u (Set u)
+wrap sys v = case lookupFM (sysTagging sys) v of
+             Just e  -> Left e
+             Nothing -> Right (Set sys v)
+
+constructSet :: Ord u => TaggedGraph u -> Vertex -> Set u
+constructSet tg v = case wrap sys (m!v) of
+                    Right set -> set
+                    --Left _ -> error "shouldn't happen"
+    where (sys,m) = normalize tg
+
+atom :: Ord u => Set u
+atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
+
+-- elems って名前の方がよい?
+toList :: Ord u => Set u -> [Either u (Set u)]
+toList (Set sys v) = map (wrap sys) (sysGraph sys ! v)
+
+fromList :: Ord u => [Either u (Set u)] -> Set u
+fromList xs = constructSet (array (0,n) ((n,children):l), t) n
+    where ((n,l,t), children) = mapAccumL phi (0,[],emptyFM) xs
+          phi (n,l,t) (Left u) =
+              ((n+1, (n,[]):l, addToFM t n u), n)
+          phi (n,l,t) (Right (Set sys v)) =
+              ((ub+off+1, l'++l, addListToFM t t'), v+off)
+              where (lb,ub) = bounds (sysGraph sys)
+                    off = n - lb
+                    l'  = [(v+off, [ch+off | ch <- children])
+                           | (v,children) <- assocs (sysGraph sys)]
+                    t'  = [(v+off,u) | (v,u) <- fmToList (sysTagging sys)]
+
+emptySet :: Ord u => Set u
+emptySet = fromList []
+
+singleton :: Ord u => Either u (Set u) -> Set u
+singleton u = fromList [u]
+
+type Var = Int
+
+solve :: Ord u => Array Var (Set (Either u Var)) -> Array Var (Set u)
+solve equations = array (bounds equations)
+                  [(i,x)
+                   | i <- indices equations
+                   , let Right x = wrap sys (m!i)]
+    where (sys,m)  = normalize $ mkTaggedGraphFromEquations equations
+{-
+solve (array (0,0) [(0,atom)])
+=> array (0,0) [(0,Set (System (array (0,0) [(0,[0])]) []) 0)]
+
+solve (array (0,1) [(0, fromList [Left (Right 1)]), (1, fromList [Left (Right 0)])])
+=> array (0,1) [(0,Set (System (array (0,0) [(0,[0])]) []) 0),(1,Set (System (array (0,0) [(0,[0])]) []) 0)]
+-}
+
+-- XXX: 汚いなぁ
+mkTaggedGraphFromEquations
+    :: Ord u => Array Var (Set (Either u Var)) -> TaggedGraph u
+mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
+    where (lb,ub) = bounds equations
+          (ub',l,t) = foldl phi (ub,[],emptyFM) (assocs equations)
+          phi (ub,l,t) (lhs, (Set sys v)) = (ub', l', t')
+              where g = sysGraph sys
+                    m :: Array Var Vertex
+                    m = array (bounds g) m'
+                    ((ub',l',t'), m') = mapAccumL psi (ub,l,t) (assocs g)
+                        where psi (ub,l,t) (x,children)
+                               | v==x =
+                                   ( (ub, (lhs, map (m!) children) : l, t)
+                                   , (x, lhs)
+                                   )
+                               | otherwise =
+                                   case lookupFM (sysTagging sys) x of
+                                   Just (Right v) ->
+                                       ((ub,l,t), (x,v))
+                                   Just (Left u) ->
+                                       ( (ub+1
+                                         , (ub+1,[]) : l
+                                         , addToFM t (ub+1) u)
+                                       , (x, ub+1)
+                                       )
+                                   Nothing ->
+                                       ( ( ub+1
+                                         , (ub+1, map (m!) children) : l
+                                         , t
+                                         )
+                                       , (x, ub+1)
+                                       )
+
+-- XXX: 汚いなぁ
+powerset :: (Show u, Ord u) => Set u -> Set u
+powerset s@(Set sys v) = trace (seq g' $ show (g',t)) $ constructSet (g',t) v'
+    where g = sysGraph sys
+          t = sysTagging sys
+          (lb,ub) = bounds g
+          v' = ub + length p + 1
+          p  = zip [(ub+1)..] (powerList (g!v))
+          g' = array (lb, v') ((v', map fst p) : p ++ assocs g)
 
 -----------------------------------------------------------------------------
 
 type Tagging u = FiniteMap Vertex u
 type TaggedGraph u = (Graph, Tagging u)
 
+data System u =
+    System
+    { sysGraph        :: !Graph
+    , sysTagging      :: !(Tagging u)
+    , sysAttrTable    :: (Table Attr)
+    }
+
+-- XXX
+instance (Ord u, Show u) => (Show (System u)) where
+    showsPrec d System{ sysGraph = g, sysTagging = t}
+        | d == 11   = ('(':) . f . (')':)
+        | otherwise = f
+        where f = ("System "++) . (showsPrec 11 g) . (' ':)
+                  . (showsPrec 11 (fmToList t))
+
+mkSystem :: Ord u => Graph -> Tagging u -> System u
+mkSystem g t =
+    System{ sysGraph      = g
+          , sysTagging    = t'
+          , sysAttrTable  = attrTable g
+          }
+    where t' = filterFM (\v _ -> null (g!v)) t
+
+normalize :: Ord u => TaggedGraph u -> (System u, Table Vertex)
+normalize (g,t) = (mkSystem g' t', m)
+    where ((g',t'),m) = minimize (g,t)
+
 -----------------------------------------------------------------------------
+
+type Attr =
+    ( Bool -- wellfounededness
+    , Rank -- Rank
+    )
 
 type Rank = Maybe Int
 -- Nothing means -∞.
--- Assuming that (Ord a => Ord (Maybe a)) and Nothing < Just _.
+-- Assuming that (Ord a => Ord (Maybe a)) and (∀x. Nothing < Just x).
 
 rankTable :: Graph -> Table Rank
-rankTable g = fmap snd table
+rankTable g = fmap snd (attrTable g)
+
+attrTable :: Graph -> Table Attr
+attrTable g = table
     where scc = stronglyConnComp [(x,x,ys) | (x,ys) <- assocs g]
           table = array (bounds g) (concatMap f scc)
           f (AcyclicSCC x) = [(x, (wf, rank))]
@@ -30,13 +200,13 @@ rankTable g = fmap snd table
               where wf     = False
                     rank x = h x xs
           h x xs
-              | null (g!x)    = Just 0
-              | isEmptySet ms = Nothing
+              | null (g!x)       = Just 0
+              | FS.isEmptySet ms = Nothing
               | otherwise =
-                  foldl1 max [r' | ch <- setToList ms
+                  foldl1 max [r' | ch <- FS.setToList ms
                               , let (wf,r) = table ! ch
                                     r'     = if wf then fmap (+1) r else r]
-              where ms = mkSet (concatMap (g!) xs) `minusSet` (mkSet xs)
+              where ms = FS.mkSet (concatMap (g!) xs) `FS.minusSet` FS.mkSet xs
 
 rankTableTest1 = a==b
     where a = rankTable (array (0,2) [(0,[1,2]), (1,[1]), (2,[])])
@@ -48,17 +218,17 @@ rankTableTest2 = a==b
 
 -----------------------------------------------------------------------------
 
-type G st = STArray st Vertex (Either Vertex (Set Vertex))
+type G st = STArray st Vertex (Either Vertex (FS.Set Vertex))
 
 mkGFromGraph :: Graph -> ST st (G st)
 mkGFromGraph g =
-    newListArray (bounds g) [Right (mkSet e) | e <- elems g]
+    newListArray (bounds g) [Right (FS.mkSet e) | e <- elems g]
 
 apply :: G st -> Vertex -> ST st Vertex
 apply g x = do (x',_) <- apply' g x
                return x'            
 
-apply' :: G st -> Vertex -> ST st (Vertex, Set Vertex)
+apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex)
 apply' g x =
     do y' <- readArray g x
        case y' of
@@ -75,14 +245,12 @@ collapse g a' b' =
        if a==b
           then return a
           else do writeArray g a' (Left b')
-                  writeArray g b' (Right (as `union` bs))
+                  writeArray g b' (Right (as `FS.union` bs))
                   return b'
 
-collapseList :: G st -> [Vertex] -> ST st ()
-collapseList g [] = return ()
-collapseList g (x:xs) =
-    do foldM (collapse g) x xs
-       return ()
+collapseList :: G st -> [Vertex] -> ST st Vertex
+collapseList g []     = return undefined
+collapseList g (x:xs) = foldM (collapse g) x xs
 
 -----------------------------------------------------------------------------
 
@@ -103,7 +271,8 @@ refine g p r v = mapM_ phi (fmToList p)
                            return ([x | x <- [pa,pb], not (null x)] ++ ps)
                     -- f :: forall a. Vertex -> ST a Bool
                     f x = do (_,children) <- apply' g x
-                             return (v `elementOf` children)
+                             children'<- mapM (apply g) (FS.setToList children)
+                             return (v `elem` children') -- XXX
 
 partitionM :: (Monad m) => (a -> m Bool) -> [a] -> m ([a],[a])
 partitionM f = foldM g ([],[])
@@ -139,14 +308,15 @@ minimize' (graph, tagging) =
        case lookupFM b Nothing of
            Nothing -> return ()
            Just xs@(x:_) ->
-               do collapseList g xs
+               do x <- collapseList g xs
                   refine g p Nothing x
+       case lookupFM p (Just 0) of
+           Just ref -> modifySTRef ref (divideRank0 tagging)
+           Nothing  -> return ()
        let loop (i,ref) =
-               do when (i==Just 0) (modifySTRef ref (divideRank0 tagging))
-                  di <- readSTRef ref
-                  let f xs = do collapseList g xs
-                                ns <- liftM nub (mapM (apply g) xs)
-                                mapM_ (refine g p i) ns
+               do di <- readSTRef ref
+                  let f xs@(x:_) = do x <- collapseList g xs
+                                      refine g p i x
                   mapM_ f di
        mapM_ loop (fmToList (delFromFM p Nothing))
        return g
