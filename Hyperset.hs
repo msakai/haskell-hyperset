@@ -16,7 +16,7 @@ module Hyperset
     , difference
     , equivClass
     , separate
-    , mapSet
+    -- , mapSet
 
     , member
     , subsetOf
@@ -43,7 +43,7 @@ import Debug.QuickCheck
 
 -----------------------------------------------------------------------------
 
--- |A set.
+-- |A set. (FIXME)
 data Ord u => Set u = Set !(System u) !Vertex deriving Show
 
 instance Ord u => Eq (Set u) where
@@ -51,7 +51,7 @@ instance Ord u => Eq (Set u) where
         sysAttrTable sys1 ! v1 == sysAttrTable sys2 ! v2 &&
         cardinality s1 == cardinality s2 &&
         in1!v1 == in2!v2
-        where (_,in1,in2) = sumSystem sys1 sys2
+        where (_,in1,in2) = mergeSystem sys1 sys2
 
 instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
     arbitrary = do sys <- arbitrary
@@ -67,12 +67,15 @@ isWellfounded (Set sys v) =
     case (sysAttrTable sys ! v) of
     (wf,_) -> wf
 
+-- |Returns the size of the set.
 cardinality :: Ord u => Set u -> Int
 cardinality (Set sys v) = length (sysGraph sys ! v)
 
+-- |Returns True if the set is the empty set.
 isEmptySet :: Ord u => Set u -> Bool
 isEmptySet x = cardinality x == 0
 
+-- |Returns True if the set is the empty singleton.
 isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
 
@@ -89,7 +92,7 @@ member (Right s1) (Set sys v) | isEmptySet s1 =
           g = sysGraph sys
 member (Right (Set sys1 v1)) (Set sys2 v2) =
     (in1 ! v1) `elem` (g ! (in2 ! v2))
-    where (sys,in1,in2) = sumSystem sys1 sys2
+    where (sys,in1,in2) = mergeSystem sys1 sys2
           g = sysGraph sys
 
 _subsetOf, subsetOf, supersetOf, properSubsetOf, properSupersetOf
@@ -100,7 +103,7 @@ s `_subsetOf` _ | isEmptySet s = True
     all (\x -> (in1!x) `FS.elementOf` ys) (g1 ! v1)
     where g1 = sysGraph sys1
           g2 = sysGraph sys2
-          (_,in1,in2) = sumSystem sys1 sys2
+          (_,in1,in2) = mergeSystem sys1 sys2
           ys = FS.mkSet (map (in2!) (g2 ! v2))
 
 -- |Is this a subset?
@@ -120,6 +123,7 @@ constructSet tg v = Set sys (m!v)
     where (sys,m) = mkSystem tg
 
 -- |Quine's atom.
+-- singleton (Right atom) == atom
 atom :: Ord u => Set u
 atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
 
@@ -152,6 +156,7 @@ singleton u = fromList [u]
 
 type Var = Int
 
+-- |FIXME
 solve :: Ord u => Array Var (Set (Either u Var)) -> Array Var (Set u)
 solve equations = array (bounds equations)
                   [(i, Set sys (m!i)) | i <- indices equations]
@@ -237,6 +242,7 @@ a `intersection` b = separate (\x -> x `member` b) a
 difference :: Ord u => Set u -> Set u -> Set u
 a `difference` b = separate (\x -> not (x `member` b)) a
 
+-- |The quotient set by the equivalent relation.
 equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
                        (Set u -> Set u)
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
@@ -253,7 +259,7 @@ classifyList f = foldl phi []
                        | otherwise    = s : phi ss x
           phi [] x = [[x]]
 
--- filter という名前の方がよい?
+-- |Filter all elements that satisfy the predicate.
 separate :: Ord u => (Either u (Set u) -> Bool) -> (Set u -> Set u)
 separate f (Set sys v) =
     constructSet (g',t) v'
@@ -266,9 +272,11 @@ separate f (Set sys v) =
 
 -- partition :: Ord u => (Either u (Set u) -> Bool) -> Set u -> (Set u, Set u)
 
+{-
 mapSet :: (Ord u, Ord u') =>
           (Either u (Set u) -> Either u' (Set u')) -> (Set u -> Set u')
 mapSet f = fromList . map f . toList
+-}
 
 -----------------------------------------------------------------------------
 
@@ -323,9 +331,9 @@ mkSystem (g,t) = (sys, m)
                 , sysAttrTable  = attrTable g'
                 }
 
-sumSystem :: Ord u => System u -> System u ->
-             (System u, Table Vertex, Table Vertex)
-sumSystem sys1 sys2 = (sys, in1, in2)
+mergeSystem :: Ord u => System u -> System u ->
+               (System u, Table Vertex, Table Vertex)
+mergeSystem sys1 sys2 = (sys, in1, in2)
     where g1 = sysGraph sys1
           g2 = sysGraph sys2
           (offset, lb, ub) = (ub1 + 1 - lb2, lb1, ub2+offset)
