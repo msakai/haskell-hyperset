@@ -358,7 +358,11 @@ mkGFromGraph g =
 
 apply :: G st -> Vertex -> ST st Vertex
 apply g x = do (x',_) <- apply' g x
-               return x'            
+               return x'
+
+parents :: G st -> Vertex -> ST st (FS.Set Vertex)
+parents g x = do (_,xs) <- apply' g x
+                 return xs
 
 apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex)
 apply' g x =
@@ -389,10 +393,10 @@ collapseList g (x:xs) = foldM (collapse g) x xs
 type Partition = [Vertex]
 type P st = FiniteMap Rank (STRef st [Partition])
 
-refine :: G st -> P st -> Rank -> Vertex -> ST st ()
+refine :: G st -> [(Rank, STRef st [Partition])] -> Rank -> Vertex -> ST st ()
 refine g p r v =
     do (_,vs) <- apply' g v
-       mapM_ (phi vs) (fmToList p)
+       mapM_ (phi vs) p
     where -- phi :: FS.Set Vertex -> (Rank, STRef st [Partition]) -> ST st ()
           phi vs (k,ref)
               | k <= r    = return ()
@@ -418,31 +422,56 @@ minimize tg@(g,t) = {-trace (seq g $ seq m $ show (g,m)) $ -} ((g',t'), m)
                          mapM (\v -> do v' <- apply gg v; return (v,v'))
                               (indices g))
 
+-- あんましFiniteMap使う必然性はないんだよなぁ
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
 minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
     do g <- mkGFromGraph graph
        let b :: FiniteMap Rank [Vertex]
            b = addListToFM_C (\old new -> new++old) emptyFM
                              [(r,[x]) | (x,(_,r)) <- assocs (attrTable graph)]
-       p_ <- mapM (\(r,vs) -> do ref <- newSTRef [vs]; return (r,ref))
+       p' <- mapM (\(r,vs) -> do ref <- newSTRef [vs]; return (r,ref))
                   (fmToList b)
        let -- p :: P st
-           p = listToFM p_
+           p = listToFM p'
        case lookupFM b RankNegInf of
+           Just xs -> do x <- collapseList g xs
+                         refine g p' RankNegInf x
            Nothing -> return ()
-           Just xs@(x:_) ->
-               do x <- collapseList g xs
-                  refine g p RankNegInf x
        case lookupFM p (Rank 0) of
            Just ref -> modifySTRef ref (divideRank0 tagging)
            Nothing  -> return ()
        let loop (i,ref) =
                do di <- readSTRef ref
+                  let (Just bi) = lookupFM b i
+                  di <- stabilize g bi di
                   let f xs@(x:_) = do x <- collapseList g xs
-                                      refine g p i x
+                                      refine g p' i x
                   mapM_ f di
+       -- fmToList の結果がソートされてることを前提としている
        mapM_ loop (fmToList (delFromFM p RankNegInf))
        return g
+
+-- XXX
+stabilize :: G st -> Partition -> [Partition] -> ST st [Partition]
+stabilize g b xs = do ys <- liftM (map FS.setToList) (f xs' xs')
+                      {- trace (seq xs $ seq ys $ show (xs,ys)) $ -}
+                      return ys
+    where b'  = FS.mkSet b
+          xs' = map FS.mkSet xs
+          f newPS []     = return newPS
+          f newPS (q:qs) =
+              do pre <- liftM (FS.intersect b' . FS.unionManySets)
+                              (mapM (parents g) (FS.setToList q))
+                 let g [] = ([],[])
+                     g (p:ps) =
+                         if not (FS.isEmptySet a || FS.isEmptySet b)
+                         then (done, [a,b] ++ qs)
+                         else (p : done, qs)
+                         where a = p `FS.intersect` pre
+                               b = p `FS.minusSet` pre
+                               (done,qs) = g ps
+                     (done,qs') = g newPS
+                 f (done++qs') (qs'++qs)          
 
 divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
 divideRank0 tagging ps = eltsFM fm
