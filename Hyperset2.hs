@@ -1,11 +1,39 @@
-module Hyperset2 where
+module Hyperset2
+    ( Set
+
+    , atom
+    , emptySet
+    , singleton
+    , Var
+    , solve
+
+    , toList
+    , fromList
+
+    , powerset
+    , union
+    , intersection
+    , difference
+    , separate
+    , mapSet
+
+    , elementOf
+    , subsetOf
+    , supersetOf
+    , properSubsetOf
+    , properSupersetOf
+    , isWellfounded
+    , cardinality
+    , isEmptySet
+    , isSingleton
+    ) where
 
 import Data.Graph
 import Data.Array.IArray
 import Data.Array.ST
 import Data.FiniteMap
 import qualified Data.Set as FS
-import Data.List
+import Data.List hiding (union)
 import Data.STRef
 import Control.Monad
 import Control.Monad.ST
@@ -20,6 +48,12 @@ instance (Ord k, Show k, Show e) => Show (FiniteMap k e) where
 powerList :: [a] -> [[a]]
 powerList = foldr phi [[]]
     where phi a xs = map (a:) xs ++ xs
+
+classify :: (a -> a -> Bool) -> [a] -> [[a]]
+classify f = foldl phi []
+    where phi (s:ss) x | f (head s) x = (x:s) : ss
+                       | otherwise    = s : phi ss x
+          phi [] x = [[x]]
 
 showSet :: (Show u, Ord u) => Set u -> String
 showSet s | isWellfounded s = f s
@@ -63,6 +97,17 @@ isEmptySet x = cardinality x == 0
 
 isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
+
+elementOf :: Ord u => (Either u (Set u)) -> Set u -> Bool
+elementOf x set = x `elem` toList set
+
+_subsetOf, subsetOf, supersetOf, properSubsetOf, properSupersetOf
+    :: Ord u => Set u -> Set u -> Bool
+as `_subsetOf`  bs = and [a `elementOf` bs | a <- toList as]
+as `subsetOf`   bs = cardinality as <= cardinality bs && as `_subsetOf` bs
+as `supersetOf` bs = bs `subsetOf` as
+as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
+as `properSupersetOf` bs = bs `properSubsetOf` as
 
 wrap :: Ord u => System u -> Vertex -> Either u (Set u)
 wrap sys v = case lookupFM (sysTagging sys) v of
@@ -160,6 +205,60 @@ powerset s@(Set sys v) = constructSet (g',t) v'
           v' = ub + length p + 1
           p  = zip [(ub+1)..] (powerList (g!v))
           g' = array (lb, v') ((v', map fst p) : p ++ assocs g)
+
+-- XXX: 汚いなぁ
+union :: Ord u => Set u -> Set u -> Set u
+union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
+    where g1 = sysGraph sys1
+          g2 = sysGraph sys2
+          (lb1,ub1) = bounds g1
+          (lb2,ub2) = bounds g2
+          off = ub1 + 1 - lb2
+          v = ub2+off+1
+          g = array (lb1,v) l
+              where l = [(v, g1!v1 ++ map (off+) (g2!v2))] ++
+                        assocs g1 ++
+                        [(v+off, map (off+) children)
+                         | (v,children) <- assocs g2]
+          t = t1 `addListToFM` [(v+off,u) | (v,u) <- fmToList t2]
+              where t1 = sysTagging sys1
+                    t2 = sysTagging sys2
+
+-- unionManySets :: Ord u => Set u -> Set u
+
+intersection :: Ord u => Set u -> Set u -> Set u
+a `intersection` b = separate (\x -> x `elementOf` b) a
+
+difference :: Ord u => Set u -> Set u -> Set u
+a `difference` b = separate (\x -> not (x `elementOf` b)) a
+
+-- equivClass (\(Left n) (Left m) -> n `mod` 3 == m `mod` 3) (fromList [Left 1, Left 2, Left 3, Left 4])
+equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
+                       (Set u -> Set u)
+equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
+    where f' a b = f (wrap sys a) (wrap sys b)
+          g = sysGraph sys
+          l = zip [ub+1..] (classify f' (g ! v))
+          (lb,ub) = bounds (sysGraph sys)
+          v' = ub + length l + 1
+          g' = array (lb, v') ((v', map fst l) : l ++ assocs g)
+
+-- filter という名前の方がよい?
+separate :: Ord u => (Either u (Set u) -> Bool) -> (Set u -> Set u)
+separate f s@(Set sys v) =
+    constructSet (g',t) v'
+    where g = sysGraph sys
+          t = sysTagging sys
+          (lb,ub) = bounds g
+          g'  = array (lb,ub+1) (foo : assocs g)
+              where foo = (v', [child | child <- g!v, f (wrap sys child)])
+          v'  = ub+1
+
+-- partition :: Ord u => (Either u (Set u) -> Bool) -> Set u -> (Set u, Set u)
+
+mapSet :: (Ord u, Ord u') =>
+          (Either u (Set u) -> Either u' (Set u')) -> (Set u -> Set u')
+mapSet f = fromList . map f . toList
 
 -----------------------------------------------------------------------------
 
