@@ -30,11 +30,17 @@ prop_intersectionInclusion (x, y :: Set Int) = z `subsetOf` x && z `subsetOf` y
 
 
 -- 時間がかかり過ぎないようにサイズを予め制限しておく
+
 prop_powersetSize (x :: Set Int) =
     c <= 10 ==> 2^c == cardinality (powerset x)
     where c = cardinality x
 
-prop_powerset (x :: Set Int) =
+prop_powerset1 (x :: Set Int) =
+    (cardinality x) <= 8 ==> all f (toList (powerset x))
+    where f (Left _)  = False
+	  f (Right z) = z `subsetOf` x
+
+prop_powerset2 (x :: Set Int) =
    (cardinality x) <= 10 ==>
         (Right x) `member` px && (Right emptySet) `member` px
     where px = powerset x

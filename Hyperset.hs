@@ -1,3 +1,17 @@
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Hyperset
+-- Copyright   :  (c) Masahiro Sakai 2004
+-- License     :  BSD-style
+-- 
+-- Maintainer  :  sakai@tom.sfc.keio.ac.jp
+-- Stability   :  unstable
+-- Portability :  portable
+--
+-- Hyperset
+--
+-----------------------------------------------------------------------------
+
 module Hyperset
     ( Set
     , UrelemOrSet
@@ -91,7 +105,7 @@ isEmptySet x = cardinality x == 0
 isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
 
--- 汚いなぁ
+-- XXX: 汚いなぁ
 -- |Is the element in the set?
 member :: Ord u => (UrelemOrSet u) -> Set u -> Bool
 member (Left x) (Set sys v) =
