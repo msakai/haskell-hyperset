@@ -416,10 +416,11 @@ refine :: G st -> [(Rank, (STRef st [Block], Block))] ->
           Rank -> Vertex -> ST st ()
 refine g p rank v =
     do (_,parents,_) <- apply g v
-       unless (FS.isEmptySet parents) (mapM_ (phi parents) p)
+       unless (FS.isEmptySet parents) (foldM_ phi parents p >> return ())
     where phi parents (i,(ref,bi))
-              | i <= rank = return ()
-              | otherwise = modifySTRef ref (foldr phi [])
+              | i <= rank = return parents
+              | otherwise = do modifySTRef ref (foldr phi [])
+                               return (parents `FS.minusSet` splitter)
               where splitter = parents `FS.intersect` bi
                     phi p ps
                         | fsIsSingleton p = p : ps
@@ -448,7 +449,6 @@ minimize tg@(g,t) = ((g',t'), m)
                                     assocs <- getAssocs gg
                                     return assocs)
 
--- あんましFiniteMap使う必然性はないんだよなぁ
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
 minimize' (graph, tagging) =
     do g <- mkG graph
@@ -492,7 +492,7 @@ stabilize g b xs =
        let table :: Array Vertex (FS.Set Vertex)
            table = array (head b', last b') tmp
                    -- setToList の結果はソートされているので、
-                   -- headとlastで最小元と最大元が得られる           
+                   -- headとlastで最小元と最大元が得られる
            ys  = f table xs
        return ys
     where f :: Array Vertex (FS.Set Vertex) -> [Block] -> [Block]
