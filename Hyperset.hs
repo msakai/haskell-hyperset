@@ -467,7 +467,7 @@ stabilize g b xs =
     where loop preds ss ps []     = ss ++ ps
           loop preds ss ps (q:qs) =
               case foldl phi (ss,[],qs) ps of
-	      (ss',ps',qs') -> loop preds ss' ps' qs'
+              (ss',ps',qs') -> loop preds ss' ps' qs'
               where splitter = FS.unionManySets (map (preds!) (FS.setToList q))
                     phi (ss,ps,qs) p
                         | not (FS.isEmptySet a) && not (FS.isEmptySet b)
