@@ -68,7 +68,8 @@ import Data.Graph
 import Data.Array.IArray
 import Data.Array.ST
 import Data.FiniteMap
-import qualified Data.Set as FS
+-- import qualified Data.Set as FS
+import qualified IntSet as FS
 import Data.List (mapAccumL)
 import Data.STRef
 import Control.Monad (unless, foldM, mapM_, mapM)
@@ -148,11 +149,11 @@ member (Right (Set sys1 v1)) (Set sys2 v2) =
 _subset :: Ord u => Set u -> Set u -> Bool
 s `_subset` _ | isEmpty s = True
 (Set sys1 v1) `_subset` (Set sys2 v2) =
-    all (\x -> (in1!x) `FS.elementOf` ys) (g1 ! v1)
+    all (\x -> (in1!x) `FS.member` ys) (g1 ! v1)
     where g1 = sysGraph sys1
           g2 = sysGraph sys2
           (_,in1,in2) = mergeSystem sys1 sys2
-          ys = FS.mkSet (map (in2!) (g2 ! v2))
+          ys = FS.fromList (map (in2!) (g2 ! v2))
 
 -- |Is this a subset?
 -- @(s1 \`subset\` s2)@ tells whether s1 is a subset of s2.
@@ -462,22 +463,22 @@ attrTable g = table
                     rank x = h x xs
           h x xs
               | null (g!x)       = Rank 0
-              | FS.isEmptySet ms = RankNegInf
+              | FS.isEmpty ms = RankNegInf
               | otherwise =
-                  foldl1 max [r' | ch <- FS.setToList ms
+                  foldl1 max [r' | ch <- FS.toList ms
                               , let (wf,r) = table ! ch
                                     r'     = if wf then succRank r else r]
-              where ms = FS.mkSet (concatMap (g!) xs) `FS.minusSet` FS.mkSet xs
+              where ms = FS.fromList (concatMap (g!) xs) `FS.difference` FS.fromList xs
 
 -----------------------------------------------------------------------------
 
-type G st = STArray st Vertex (Either Vertex (FS.Set Vertex, FS.Set Vertex))
+type G st = STArray st Vertex (Either Vertex (FS.IntSet, FS.IntSet))
 
 mkG :: Graph -> ST st (G st)
-mkG g = newListArray (bounds g) [Right (FS.mkSet parents, FS.unitSet v)
+mkG g = newListArray (bounds g) [Right (FS.fromList parents, FS.single v)
                                  | (v, parents) <- assocs (transposeG g)]
 
-apply :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex, FS.Set Vertex)
+apply :: G st -> Vertex -> ST st (Vertex, FS.IntSet, FS.IntSet)
 apply g x =
     do y' <- readArray g x
        case y' of
@@ -503,22 +504,22 @@ collapseList g (x:xs) = foldM (collapse g) x xs
 
 -----------------------------------------------------------------------------
 
-type Block = FS.Set Vertex
+type Block = FS.IntSet
 
 refine :: G st -> [(Rank, (STRef st [Block], Block))] ->
           Rank -> Vertex -> ST st ()
 refine g p rank v =
     do (_,parents,_) <- apply g v
-       unless (FS.isEmptySet parents) (foldM phi parents p >> return ())
+       unless (FS.isEmpty parents) (foldM phi parents p >> return ())
     where phi xs (i,(ref,bi))
               | i <= rank = return xs
               | splitterCardinality == 0 ||
-                splitterCardinality == FS.cardinality bi
+                splitterCardinality == FS.size bi
                   = return xs
               | otherwise = do modifySTRef ref (foldr phi [])
-                               return (xs `FS.minusSet` splitter)
-              where splitter = xs `FS.intersect` bi                 
-                    splitterCardinality = FS.cardinality splitter
+                               return (xs `FS.difference` splitter)
+              where splitter = xs `FS.intersection` bi                 
+                    splitterCardinality = FS.size splitter
                     phi p ps
                         | fsIsSingleton p = p : ps
                         | otherwise =
@@ -539,7 +540,7 @@ minimize tg@(g,t) = ((g',t'), m)
              where phi (n,xs,ys) (_, Left _)       = (n, xs, ys)
                    phi (n,xs,ys) (v, Right (_,vs)) =
                        ( n+1
-                       , [(x,n) | x <- FS.setToList vs] ++ xs
+                       , [(x,n) | x <- FS.toList vs] ++ xs
                        , (n, nubAndSort $ map (m!) (g!v)) : ys
                        )
                    hoge = runST (do gg <- minimize' tg
@@ -551,14 +552,14 @@ minimize' (graph, tagging) =
     do g <- mkG graph
        p' <- do let b :: FiniteMap Rank Block
                     b = addListToFM_C (\old new -> new `FS.union` old) emptyFM
-                        [(rank, FS.unitSet x)
+                        [(rank, FS.single x)
                          | (x,(_,rank)) <- assocs (attrTable graph)]
                     f (rank,vs) = do ref <- newSTRef [vs]
                                      return (rank, (ref,vs))
                 mapM f (fmToList b)
        let p = listToFM p'
        case lookupFM p RankNegInf of
-           Just (_,bi) -> do x <- collapseList g (FS.setToList bi)
+           Just (_,bi) -> do x <- collapseList g (FS.toList bi)
                              refine g p' RankNegInf x
            Nothing -> return ()
        case lookupFM p (Rank 0) of
@@ -567,7 +568,7 @@ minimize' (graph, tagging) =
        let loop (rank, (ref,bi)) =
                do di <- readSTRef ref
                   di <- stabilize g bi di
-                  let f xs = do x <- collapseList g (FS.setToList xs)
+                  let f xs = do x <- collapseList g (FS.toList xs)
                                 refine g p' rank x
                   mapM_ f di
        -- fmToList の結果がソートされてることを前提としている
@@ -577,22 +578,22 @@ minimize' (graph, tagging) =
 divideRank0 :: (Ord u) => Tagging u -> [Block] -> [Block]
 divideRank0 tagging ps = eltsFM fm
     where fm = addListToFM_C (\old new -> new `FS.union` old) emptyFM
-                             [(lookupFM tagging x, FS.unitSet x)
-                              | x <- concatMap FS.setToList ps]
+                             [(lookupFM tagging x, FS.single x)
+                              | x <- concatMap FS.toList ps]
 
 stabilize :: G st -> Block -> [Block] -> ST st [Block]
 stabilize g b xs =
-    do let b' = FS.setToList b
+    do let b' = FS.toAscList b
        tmp <- mapM (\x ->
                     do (_,parents,_) <- apply g x
-                       return (x, parents `FS.intersect` b)) b'
-       let table :: Array Vertex (FS.Set Vertex)
+                       return (x, parents `FS.intersection` b)) b'
+       let table :: Array Vertex (FS.IntSet)
            table = array (head b', last b') tmp
                    -- setToList の結果はソートされているので、
                    -- headとlastで最小元と最大元が得られる
-           ys  = f table (FS.cardinality b) xs
+           ys  = f table (FS.size b) xs
        return ys
-    where f :: Array Vertex (FS.Set Vertex) -> Int -> [Block] -> [Block]
+    where f :: Array Vertex (FS.IntSet) -> Int -> [Block] -> [Block]
           f table bsize xs = loop [] xs xs
               where loop :: [Block] -> [Block] -> [Block] -> [Block]
                     loop ss [] _  = ss
@@ -604,9 +605,8 @@ stabilize g b xs =
                         | otherwise =
                             case foldl phi (ss,[],qs) ps of
                             (ss',ps',qs') -> loop ss' ps' qs'
-                        where splitter = FS.unionManySets
-                                           (map (table!) (FS.setToList q))
-                              splitterCardinality = FS.cardinality splitter
+                        where splitter = FS.unions (map (table!) (FS.toList q))
+                              splitterCardinality = FS.size splitter
                               phi (ss,ps,qs) p
                                   | fsIsSingleton p = (p:ss, ps, qs)
                                   | otherwise =
@@ -619,21 +619,21 @@ stabilize g b xs =
 --------------------------------------------------------------------}
 
 {-# INLINE fsIsSingleton #-}
-fsIsSingleton :: (Ord a) => FS.Set a -> Bool
-fsIsSingleton x = FS.cardinality x == 1
+fsIsSingleton :: FS.IntSet -> Bool
+fsIsSingleton x = FS.size x == 1
 
 {-# INLINE fsSplit #-}
-fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> Maybe (FS.Set a, FS.Set a)
+fsSplit :: FS.IntSet -> FS.IntSet -> Maybe (FS.IntSet, FS.IntSet)
 fsSplit x splitter = seq x $ seq splitter $
       if isize == 0
       then Nothing
-      else if isize == FS.cardinality x
+      else if isize == FS.size x
            then Nothing
-           else Just (i, x `FS.minusSet` i)
-    where i = x `FS.intersect` splitter
-          isize = FS.cardinality i
+           else Just (i, x `FS.difference` i)
+    where i = x `FS.intersection` splitter
+          isize = FS.size i
 
-nubAndSort :: (Ord a) => [a] -> [a]
-nubAndSort = FS.setToList . FS.mkSet
+nubAndSort :: [Int] -> [Int]
+nubAndSort = FS.toAscList . FS.fromList
 
 -----------------------------------------------------------------------------
