@@ -11,7 +11,33 @@
 -----------------------------------------------------------------------------
 
 module Hyperset
-    where
+    ( Set
+    , setToList
+
+    , atom
+    , emptySet
+    , singleton
+    , mkSet
+    , Var
+    , solve
+
+    , powerset
+    , union
+    , intersect
+    , minus
+    , separate
+    , mapSet
+
+    , elementOf
+    , subsetOf
+    , supersetOf
+    , properSubsetOf
+    , properSupersetOf
+    , isWellfounded
+    , cardinality
+    , isEmptySet
+    , isSingleton
+    ) where
 
 import Data.Graph
 import Data.Array
@@ -81,6 +107,9 @@ atom = constructSet (array (0,0) [(0,[0])], emptyFM) [[[0]]] 0
 emptySet :: Ord u => Set u
 emptySet = mkSet []
 
+singleton :: Ord u => Either u (Set u) -> Set u
+singleton u = mkSet [u]
+
 mkSet :: Ord u => [Either u (Set u)] -> Set u
 mkSet xs = constructSet (array (0,n) ((n,children):l), t) ([[n]]:qs) n
     where ((n,l,t,qs), children) = mapAccumL phi (0,[],emptyFM,[]) xs
@@ -146,10 +175,6 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
                                        , (x, ub+1)
                                        )
 
-
-singleton :: Ord u => Either u (Set u) -> Set u
-singleton u = mkSet [u]
-
 -- XXX: ‰˜‚¢‚È‚Ÿ
 powerset :: Ord u => Set u -> Set u
 powerset (Set sys v) = constructSet (g',t) qs v'
@@ -160,7 +185,7 @@ powerset (Set sys v) = constructSet (g',t) qs v'
           ub' = v' + length p
           p   = zip [(v'+1)..] (powerList (g!v))
           g'  = array (lb, ub') ((v', [a | (a,_) <- p]) : p ++ assocs g)
-          qs = ([[[i] | i <- indices g]] ++ [ [[i]] | i <- [ub+1..ub'] ])
+          qs = [[i] | i <- indices g] : [ [[i]] | i <- [ub+1..ub'] ]
 
 -- XXX: ‰˜‚¢‚È‚Ÿ
 union :: Ord u => Set u -> Set u -> Set u
@@ -171,34 +196,49 @@ union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) qs v
           (lb2,ub2) = bounds g2
           off = ub1 + 1 - lb2
           v = ub2+off+1
-          g = array (lb1,v)
-              ([(v, g1!v1 ++ map (off+) (g2!v2))] ++
-               assocs g1 ++
-               [(v+off, [ch+off| ch <- children])
-                | (v,children) <- assocs g2])
-          t = sysTagging sys1 `addListToFM`
-              [(v+off,u) | (v,u) <- fmToList (sysTagging sys2)]
-          qs = [[v]] : [[[i] | i <- indices g1], [[i+off] | i <- indices g2]]
+          g = array (lb1,v) l
+              where l = [(v, g1!v1 ++ map (off+) (g2!v2))] ++
+                        assocs g1 ++
+                        [(v+off, map (off+) children)
+                         | (v,children) <- assocs g2]
+          t = t1 `addListToFM` [(v+off,u) | (v,u) <- fmToList t2]
+              where t1 = sysTagging sys1
+                    t2 = sysTagging sys2
+          qs = [ [[v]]
+               , [[i] | i <- indices g1]
+               , [[i+off] | i <- indices g2]
+               ]
 
 -- unionManySets :: Ord u => Set u -> Set u
 
 intersect :: Ord u => Set u -> Set u -> Set u
 a `intersect` b = separate (\x -> x `elementOf` b) a
 
-minusSet :: Ord u => Set u -> Set u -> Set u
-a `minusSet` b = separate (\x -> not (x `elementOf` b)) a
+minus :: Ord u => Set u -> Set u -> Set u
+a `minus` b = separate (\x -> not (x `elementOf` b)) a
 
--- equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
---                        (Set u -> Set u)
+-- equivClass (\(Left n) (Left m) -> n `mod` 3 == m `mod` 3) (mkSet [Left 1, Left 2, Left 3, Left 4])
+equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
+                       (Set u -> Set u)
+equivClass f (Set sys v) = constructSet (g', sysTagging sys) qs v'
+    where f' a b = f (wrap sys a) (wrap sys b)
+          g = sysGraph sys
+          l = zip [ub+1..] (classifyList f' (g ! v) [])
+          (lb,ub) = bounds (sysGraph sys)
+          v' = ub + length l + 1
+          g' = array (lb, v') ((v', map fst l) : l ++ assocs g)
+          qs = [ [[i] | i <- indices g], [[v']] ] ++ [[[i]] | (i,_) <- l]
 
 separate :: Ord u => (Either u (Set u) -> Bool) -> (Set u -> Set u)
-separate f s@(Set sys@System{ sysGraph = g, sysTagging = t } v) =
+separate f s@(Set sys v) =
     constructSet (g',t) qs v'
-    where (lb,ub) = bounds g
+    where g = sysGraph sys
+          t = sysTagging sys
+          (lb,ub) = bounds g
           g'  = array (lb,ub+1) (foo : assocs g)
               where foo = (v', [child | child <- g!v, f (wrap sys child)])
           v'  = ub+1
-          qs  = [[[v']]] ++ [[[i] | i <- indices g]]
+          qs  = [ [[v']], [[i] | i <- indices g] ]
 
 mapSet :: (Ord u, Ord u') =>
           (Either u (Set u) -> Either u' (Set u')) -> (Set u -> Set u')
@@ -277,11 +317,11 @@ wellfoundedTable g = table
 type EquivClass a = [a]
 type QuoSet a = [EquivClass a]
 
+-- mergeQuoSets E {A/E, B/E, ...} = (A¾B¾...)/E
 mergeQuoSets :: (a -> a -> Bool) -> [QuoSet a] -> QuoSet a
 mergeQuoSets eq = foldl (mergeQuoSet2 eq) []
 
--- A, B: disjoint
--- mergeQuoSets E A/E B/E = (A¾B)/E
+-- mergeQuoSet2 E A/E B/E = (A¾B)/E
 mergeQuoSet2 :: (a -> a -> Bool) -> QuoSet a -> QuoSet a -> QuoSet a
 mergeQuoSet2 eq = foldl phi
     where phi qa e1 = g qa
@@ -290,7 +330,6 @@ mergeQuoSet2 eq = foldl phi
                                | otherwise      = e2 : g e2s
                     r = head e1
 
-{-
 classify :: (a -> a -> Bool) -> a -> [[a]] -> [[a]]
 classify f x c = g c
     where g []     = [[x]]
@@ -299,7 +338,6 @@ classify f x c = g c
 
 classifyList :: (a -> a -> Bool) -> [a] -> [[a]] -> [[a]]
 classifyList f xs c = foldl (flip (classify f)) c xs
--}
 
 zipWith' :: (a -> a -> a) -> [a] -> [a] -> [a]
 zipWith' f = g
