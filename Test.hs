@@ -1,7 +1,7 @@
 import Hyperset
 import Data.Array
 import Data.List (intersperse)
-import Data.FiniteMap
+import qualified Data.Map as Map
 
 showSet :: (Show u, Ord u) => Set u -> String
 showSet s | isWellfounded s = f s
@@ -23,7 +23,7 @@ test2 = powerset test1
 test3 :: Bool
 test3 = cardinality (powerset x) == 8
     where x :: Set Int
-          SetElem x = decorate (array (0,4) [(0,[1,3,4]),(1,[0,1,2,4]),(2,[]),(3,[2,3,4]),(4,[])]) (listToFM [(4,-1)]) ! 0
+          SetElem x = decorate (array (0,4) [(0,[1,3,4]),(1,[0,1,2,4]),(2,[]),(3,[2,3,4]),(4,[])]) (Map.fromList [(4,-1)]) ! 0
 
 testSolve :: Bool
 testSolve = solutions!0 /= (solutions!1 :: Set Int)
