@@ -299,11 +299,11 @@ instance (Ord u, Arbitrary u) => Arbitrary (System u) where
 mkSystem :: Ord u => TaggedGraph u -> (System u, Table Vertex)
 mkSystem (g,t) = (sys, m)
     where ((g',t'),m) = minimize (g,t)
-	  sys = System
-		{ sysGraph      = g'
-		, sysTagging    = filterFM (\v _ -> null (g' ! v)) t'
-		, sysAttrTable  = attrTable g'
-		}
+          sys = System
+                { sysGraph      = g'
+                , sysTagging    = filterFM (\v _ -> null (g' ! v)) t'
+                , sysAttrTable  = attrTable g'
+                }
 
 sumSystem :: Ord u => System u -> System u ->
              (System u, Table Vertex, Table Vertex)
@@ -381,9 +381,8 @@ rankTableTest2 = a==b
 type G st = STArray st Vertex (Either Vertex (FS.Set Vertex, FS.Set Vertex))
 
 mkG :: Graph -> ST st (G st)
-mkG g =
-    newListArray (bounds g) [Right (FS.mkSet parents, FS.unitSet v)
-                             | (v, parents) <- assocs (transposeG g)]
+mkG g = newListArray (bounds g) [Right (FS.mkSet parents, FS.unitSet v)
+                                 | (v, parents) <- assocs (transposeG g)]
 
 apply :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex, FS.Set Vertex)
 apply g x =
@@ -413,18 +412,19 @@ collapseList g (x:xs) = foldM (collapse g) x xs
 
 type Block = FS.Set Vertex
 
-refine :: G st -> [(Rank, STRef st [Block])] -> Rank -> Vertex -> ST st ()
+refine :: G st -> [(Rank, (STRef st [Block], Block))] ->
+          Rank -> Vertex -> ST st ()
 refine g p rank v =
     do (_,parents,_) <- apply g v
        unless (FS.isEmptySet parents) (mapM_ (phi parents) p)
-    where -- phi :: FS.Set Vertex -> (Rank, STRef st [Block]) -> ST st ()
-          phi parents (i,ref)
+    where phi parents (i,(ref,bi))
               | i <= rank = return ()
               | otherwise = modifySTRef ref (foldr phi [])
-              where phi p ps
+              where splitter = parents `FS.intersect` bi
+                    phi p ps
                         | fsIsSingleton p = p : ps
                         | otherwise =
-                            case fsSplit p parents of
+                            case fsSplit p splitter of
                             Just (a,b) -> a : b : ps
                             Nothing    -> p : ps
 
@@ -452,26 +452,25 @@ minimize tg@(g,t) = ((g',t'), m)
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
 minimize' (graph, tagging) =
     do g <- mkG graph
-       let b :: FiniteMap Rank Block
-           b = addListToFM_C (\old new -> new `FS.union` old) emptyFM
-                             [(rank, FS.unitSet x)
-                              | (x,(_,rank)) <- assocs (attrTable graph)]
-       p' <- mapM (\(rank,vs) -> do ref <- newSTRef [vs]; return (rank,ref))
-                  (fmToList b)
-       let -- p :: P st
-           p = listToFM p'
-       case lookupFM b RankNegInf of
-           Just xs -> do x <- collapseList g (FS.setToList xs) -- XXX
-                         refine g p' RankNegInf x
+       p' <- do let b :: FiniteMap Rank Block
+                    b = addListToFM_C (\old new -> new `FS.union` old) emptyFM
+                        [(rank, FS.unitSet x)
+                         | (x,(_,rank)) <- assocs (attrTable graph)]
+                    f (rank,vs) = do ref <- newSTRef [vs]
+                                     return (rank, (ref,vs))
+                mapM f (fmToList b)
+       let p = listToFM p'
+       case lookupFM p RankNegInf of
+           Just (_,bi) -> do x <- collapseList g (FS.setToList bi)
+                             refine g p' RankNegInf x
            Nothing -> return ()
        case lookupFM p (Rank 0) of
-           Just ref -> modifySTRef ref (divideRank0 tagging)
-           Nothing  -> return ()
-       let loop (rank, ref) =
+           Just (ref,_) -> modifySTRef ref (divideRank0 tagging)
+           Nothing      -> return ()
+       let loop (rank, (ref,bi)) =
                do di <- readSTRef ref
-                  let (Just bi) = lookupFM b rank
                   di <- stabilize g bi di
-                  let f xs = do x <- collapseList g (FS.setToList xs) -- XXX
+                  let f xs = do x <- collapseList g (FS.setToList xs)
                                 refine g p' rank x
                   mapM_ f di
        -- fmToList の結果がソートされてることを前提としている
