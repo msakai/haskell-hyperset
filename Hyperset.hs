@@ -36,7 +36,7 @@ import qualified Data.Set as FS
 import Data.List hiding (union)
 import Data.STRef
 import Control.Monad
-import Control.Monad.ST
+import Control.Monad.ST.Strict
 import Debug.Trace
 
 -----------------------------------------------------------------------------
@@ -309,6 +309,7 @@ instance Ord Rank where
     RankNegInf `compare` _ = LT
     _ `compare` RankNegInf = GT
 
+{-# INLINE succRank #-}
 succRank :: Rank -> Rank
 succRank (Rank n)   = Rank (n+1)
 succRank RankNegInf = RankNegInf
@@ -360,7 +361,7 @@ apply g x = do (x',_) <- apply' g x
                return x'
 
 apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex)
-apply' g x =
+apply' g x = seq g (seq x (
     do y' <- readArray g x
        case y' of
           Right parents -> return (x,parents)
@@ -368,6 +369,7 @@ apply' g x =
               do (z, parents) <- apply' g y
                  unless (y==z) (writeArray g x (Left z)) -- 経路圧縮
                  return (z, parents)
+    ))
 
 collapse :: G st -> Vertex -> Vertex -> ST st Vertex
 collapse g a' b' =
@@ -388,6 +390,8 @@ collapseList g (x:xs) = foldM (collapse g) x xs
 type Partition = [Vertex]
 type P st = FiniteMap Rank (STRef st [Partition])
 
+-- この関数がボトルネックになってる
+-- メモリと実行時間の68%をこの関数が消費
 refine :: G st -> [(Rank, STRef st [Partition])] -> Rank -> Vertex -> ST st ()
 refine g p rank v =
     do (_,vs) <- apply' g v
