@@ -1,25 +1,28 @@
 import Debug.QuickCheck
 import Hyperset
 
+prop_eqReflexive (x :: Set Int)  = x==x
+prop_eqSymmetry (x :: Set Int) y = (x==y) == (y==x)
+
 prop_cardinalityNonNegative (x :: Set Int) = cardinality x >= 0
 prop_cardinality1 (x :: Set Int) = cardinality x == length (toList x)
 
 {-
-prop_propersubsetIsSubset (x, y :: Set Int) =
+prop_propersubsetIsSubset (x :: Set Int) y =
     x `properSubsetOf` y ==> x `subsetOf` y
 -}
 
 prop_toList (x :: Set Int) = fromList (toList x) == x
 
-prop_unionSize (x, y :: Set Int) =
+prop_unionSize (x :: Set Int) y =
     cardinality (x `union` y) <= cardinality x + cardinality y &&
     cardinality x <= cardinality (x `union` y) &&
     cardinality y <= cardinality (x `union` y)
     
-prop_unionInclusion (x, y :: Set Int) = x `subsetOf` z && y `subsetOf` z
+prop_unionInclusion (x :: Set Int) y = x `subsetOf` z && y `subsetOf` z
     where z = x `union` y
 
-prop_intersectionSize (x, y :: Set Int) = 
+prop_intersectionSize (x :: Set Int) y  = 
     cardinality (x `intersection` y) <= cardinality x &&
     cardinality (x `intersection` y) <= cardinality y
 prop_intersectionInclusion (x, y :: Set Int) = z `subsetOf` x && z `subsetOf` y
