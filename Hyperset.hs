@@ -501,7 +501,9 @@ collapse g a' b' =
        if a==b
           then return a
           else do writeArray g a' (Left b')
-                  writeArray g b' (Right (pas `IS.union` pbs, as `IS.union` bs))
+                  writeArray g b' (Right ( pas `IS.union` pbs
+                                         , as `IS.union` bs
+                                         ))
                   return b'
 
 collapseList :: G st -> [Vertex] -> ST st Vertex
@@ -554,7 +556,7 @@ minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
 minimize' (graph, tagging) =
     do g <- mkG graph
        p' <- do let b :: FiniteMap Rank Block
-                    b = addListToFM_C (\old new -> new `IS.union` old) emptyFM
+                    b = addListToFM_C IS.union emptyFM
                         [(rank, IS.single x)
                          | (x,(_,rank)) <- assocs (attrTable graph)]
                     f (rank,vs) = do ref <- newSTRef [vs]
@@ -580,7 +582,7 @@ minimize' (graph, tagging) =
 
 divideRank0 :: (Ord u) => Tagging u -> [Block] -> [Block]
 divideRank0 tagging ps = eltsFM fm
-    where fm = addListToFM_C (\old new -> new `IS.union` old) emptyFM
+    where fm = addListToFM_C IS.union emptyFM
                              [(lookupFM tagging x, IS.single x)
                               | x <- concatMap IS.toList ps]
 
