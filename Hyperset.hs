@@ -58,6 +58,7 @@ instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
                    case toSetOrElem sys v of
                        Left _    -> arbitrary
                        Right set -> return set
+    coarbitrary (Set sys v) = variant v . coarbitrary sys
 
 isWellfounded :: Ord u => Set u -> Bool
 isWellfounded (Set sys v) =
@@ -277,14 +278,14 @@ instance (Ord u, Show u) => (Show (System u)) where
                   . (showsPrec 11 attr)
 
 instance (Ord u, Arbitrary u) => Arbitrary (System u) where
-    arbitrary = sized sys
-        where sys n = do ub <- choose (0,n)
-                         xs <- mapM (f ub) [0..ub]
-                         let g = array (0,ub) xs
-                         ys <- foldM h [] [i | (i,children)<-xs, null children]
-                         let t = listToFM ys
-                             (sys,m) = mkSystem (g,t)
-                         return sys
+    arbitrary = sized genSys
+        where genSys n =
+                  do ub <- choose (0,n)
+                     xs <- mapM (f ub) [0..ub]
+                     let g = array (0,ub) xs
+                     ys <- foldM h [] [i | (i,children)<-xs, null children]
+                     let (sys,m) = mkSystem (g, listToFM ys)
+                     return sys
               f ub x =
                   do y <- choose (0, (ub+1)*2)
                      children <- sequence (take y (repeat (choose (0,ub))))
@@ -295,6 +296,9 @@ instance (Ord u, Arbitrary u) => Arbitrary (System u) where
                         then return as
                         else do e <- arbitrary
                                 return ((x,e) : as)
+    coarbitrary sys = 
+        coarbitrary (fmToList (sysTagging sys)) .
+        coarbitrary (assocs (sysGraph sys))
 
 mkSystem :: Ord u => TaggedGraph u -> (System u, Table Vertex)
 mkSystem (g,t) = (sys, m)
