@@ -61,11 +61,13 @@ fsIsSingleton :: (Ord a) => FS.Set a -> Bool
 fsIsSingleton x = FS.cardinality x == 1
 
 {-# INLINE fsSplit #-}
-fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> (FS.Set a, FS.Set a)
+fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> Maybe (FS.Set a, FS.Set a)
 fsSplit x splitter = seq x $ seq splitter $
       if FS.isEmptySet i
-      then (i, x)
-      else (i, x `FS.minusSet` i)
+      then Nothing
+      else if (FS.cardinality x == FS.cardinality i)
+           then Nothing
+           else Just (i, x `FS.minusSet` i)
     where i = x `FS.intersect` splitter
 
 showSet :: (Show u, Ord u) => Set u -> String
@@ -414,9 +416,8 @@ refine g p rank v =
                         | fsIsSingleton p = p : ps
                         | otherwise =
                             case fsSplit p vs of
-                            (a,b) | FS.isEmptySet a ||
-                                    FS.isEmptySet b -> p : ps
-                                  | otherwise -> a : b : ps
+                            Just (a,b) -> a : b : ps
+                            Nothing    -> p : ps
 
 -----------------------------------------------------------------------------
 
@@ -500,9 +501,8 @@ stabilize g b xs =
                         | fsIsSingleton p = (p:ss,ps,qs)
                         | otherwise =
                             case fsSplit p splitter of
-                            (a,b) | FS.isEmptySet a || FS.isEmptySet b ->
-                                      (ss, p : ps, qs)
-                                  | otherwise -> (ss, a:b:ps, a:b:qs)
+                            Just (a,b) -> (ss, a:b:ps, a:b:qs)
+                            Nothing    -> (ss, p : ps, qs)
 
 -----------------------------------------------------------------------------
 
