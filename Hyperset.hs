@@ -18,6 +18,31 @@ module Hyperset
       Set
     , UrelemOrSet
 
+    -- * Operators
+    , (\\)
+
+    -- * Query
+    , isWellfounded
+    , cardinality
+    , isEmptySet
+    , isSingleton
+    , member
+    , subsetOf
+    , supersetOf
+    , properSubsetOf
+    , properSupersetOf
+
+    -- * Construction
+    , atom
+    , emptySet
+    , singleton
+    , powerset
+    , union
+    , intersection
+    , difference
+    , equivClass
+    , separate
+
     -- * System of equations
     , Var
     , SystemOfEquations
@@ -30,28 +55,6 @@ module Hyperset
     , Picture
     , decorate
     , picture
-
-    -- * Query
-    , member
-    , subsetOf
-    , supersetOf
-    , properSubsetOf
-    , properSupersetOf
-    , isWellfounded
-    , cardinality
-    , isEmptySet
-    , isSingleton
-
-    -- * Construction
-    , atom
-    , emptySet
-    , singleton
-    , powerset
-    , union
-    , intersection
-    , difference
-    , equivClass
-    , separate
 
     -- * Conversion
 
@@ -72,33 +75,23 @@ import Data.STRef
 import Control.Monad (unless, foldM, mapM_, mapM)
 import Control.Monad.ST (runST, ST)
 
------------------------------------------------------------------------------
+{--------------------------------------------------------------------
+  Operators
+--------------------------------------------------------------------}
+infixl 9 \\
 
--- |Set with urelements from {φ}∪u. 
+(\\) :: Ord u => Set u -> Set u -> Set u
+s1 \\ s2 = s1 `difference` s2
+
+{--------------------------------------------------------------------
+  Set type
+--------------------------------------------------------------------}
+
+-- |Set with extra urelements from @u@.
 data Ord u => Set u = Set !(System u) !Vertex deriving Show
 
--- Set u のsupertypeとして定義できたらいいのになぁ。
--- |Urelemnt (except φ) or set.
+-- |Extra urelemnt or set.
 type UrelemOrSet u = Either u (Set u)
-
--- |Variable in system of equation.
-type Var = Int
-
--- |System of equations.
-type SystemOfEquations u = Array Var (Set (Either u Var))
-
--- |Solution of system of equation.
-type Solution u = Array Var (Set u)
-
--- |A tagging is a partial map t: G->U that assigns to childless node
--- of G an element of U.
-type Tagging u = FiniteMap Vertex u
-
--- |FIXME
-type Decoration u = Table (UrelemOrSet u)
-
--- |FIXME
-type Picture u = (Graph, Tagging u, Vertex)
 
 instance Ord u => Eq (Set u) where
     s1 == s2 | isEmptySet s1 && isEmptySet s2 = True
@@ -108,21 +101,25 @@ instance Ord u => Eq (Set u) where
         in1!v1 == in2!v2
         where (_,in1,in2) = mergeSystem sys1 sys2
 
--- |A set is wellfounded or not.
+{--------------------------------------------------------------------
+  Query
+--------------------------------------------------------------------}
+
+-- |Is this a well-founded set?
 isWellfounded :: Ord u => Set u -> Bool
 isWellfounded (Set sys v) =
     case (sysAttrTable sys ! v) of
     (wf,_) -> wf
 
--- |Returns the size of the set.
+-- |The number of elements in the set.
 cardinality :: Ord u => Set u -> Int
 cardinality (Set sys v) = length (sysGraph sys ! v)
 
--- |True if the set is the empty set.
+-- |Is this the empty set?
 isEmptySet :: Ord u => Set u -> Bool
 isEmptySet x = cardinality x == 0
 
--- |True if the set is a singleton.
+-- |Is this a singleton set?.
 isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
 
@@ -154,32 +151,27 @@ s `_subsetOf` _ | isEmptySet s = True
           ys = FS.mkSet (map (in2!) (g2 ! v2))
 
 -- |Is this a subset?
--- (s1 `subsetOf` s2) tells whether s1 is a subset of s2.
+-- (@s1 `subsetOf` s2@) tells whether s1 is a subset of s2.
 as `subsetOf`   bs = cardinality as <= cardinality bs && as `_subsetOf` bs
 
 -- |Is this superset?
--- (s1 `supersetOf` s2) tells whether s1 is a superset of s2.
+-- (@s1 `supersetOf` s2@) tells whether s1 is a superset of s2.
 as `supersetOf` bs = bs `subsetOf` as
 
 -- |Is this a proper subset?
--- (s1 `propertSubsetOf` s2) tells whether s1 is a proper subset of s2.
+-- (@s1 `propertSubsetOf` s2@) tells whether s1 is a proper subset of s2.
 as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
 
 -- |Is this a proper subset?
--- (s1 `propertSupersetOf` s2) tells whether s1 is a proper superset of s2.
+-- (@s1 `propertSupersetOf` s2@) tells whether s1 is a proper superset of s2.
 as `properSupersetOf` bs = bs `properSubsetOf` as
 
-toUrelemOrSet :: Ord u => System u -> Vertex -> UrelemOrSet u
-toUrelemOrSet sys v = case lookupFM (sysTagging sys) v of
-                      Just e  -> Left e
-                      Nothing -> Right (Set sys v)
-
-constructSet :: Ord u => TaggedGraph u -> Vertex -> Set u
-constructSet tg v = Set sys (m!v)
-    where (sys,m) = mkSystem tg
+{--------------------------------------------------------------------
+  Construction
+--------------------------------------------------------------------}
 
 -- |Quine's atom.
--- singleton (Right atom) == atom
+-- singleton @(Right atom) == atom@
 atom :: Ord u => Set u
 atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
 
@@ -209,57 +201,6 @@ emptySet = fromList []
 -- |Create a singleton set.
 singleton :: Ord u => UrelemOrSet u -> Set u
 singleton u = fromList [u]
-
--- |Solve a system of equation.
-solve :: Ord u => SystemOfEquations u -> Solution u
-solve equations = array (bounds equations)
-                  [(i, Set sys (m!i)) | i <- indices equations]
-    where (sys,m)  = mkSystem $ mkTaggedGraphFromEquations equations
-
--- XXX: 汚いなぁ
-mkTaggedGraphFromEquations
-    :: Ord u => Array Var (Set (Either u Var)) -> TaggedGraph u
-mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
-    where (lb,ub) = bounds equations
-          (ub',l,t) = foldl phi (ub,[],emptyFM) (assocs equations)
-          phi (ub,l,t) (lhs, (Set sys v)) = (ub', l', t')
-              where g = sysGraph sys
-                    m :: Array Var Vertex
-                    m = array (bounds g) m'
-                    ((ub',l',t'), m') = mapAccumL psi (ub,l,t) (assocs g)
-                        where psi (ub,l,t) (x,children)
-                               | v==x =
-                                   ( (ub, (lhs, map (m!) children) : l, t)
-                                   , (x, lhs)
-                                   )
-                               | otherwise =
-                                   case lookupFM (sysTagging sys) x of
-                                   Just (Right v) ->
-                                       ((ub,l,t), (x,v))
-                                   Just (Left u) ->
-                                       ( (ub+1
-                                         , (ub+1,[]) : l
-                                         , addToFM t (ub+1) u)
-                                       , (x, ub+1)
-                                       )
-                                   Nothing ->
-                                       ( ( ub+1
-                                         , (ub+1, map (m!) children) : l
-                                         , t
-                                         )
-                                       , (x, ub+1)
-                                       )
-
--- |FIXME
--- Every apg has a unique decoration.
-decorate :: (Ord u) => Graph -> Tagging u -> Decoration u
-decorate g t = d
-    where (sys,m) = mkSystem (g,t)
-          d = array (bounds g) [(v, toUrelemOrSet sys (m!v)) | v <- indices g]
-
--- |FIXME
-picture :: (Ord u) => Set u -> Picture u
-picture (Set sys v) = (sysGraph sys, sysTagging sys, v)
 
 -- XXX: 汚いなぁ
 -- |The powerset of the set.
@@ -343,7 +284,97 @@ mapSet :: (Ord u, Ord u') =>
 mapSet f = fromList . map f . toList
 -}
 
------------------------------------------------------------------------------
+
+toUrelemOrSet :: Ord u => System u -> Vertex -> UrelemOrSet u
+toUrelemOrSet sys v = case lookupFM (sysTagging sys) v of
+                      Just e  -> Left e
+                      Nothing -> Right (Set sys v)
+
+constructSet :: Ord u => TaggedGraph u -> Vertex -> Set u
+constructSet tg v = Set sys (m!v)
+    where (sys,m) = mkSystem tg
+
+{--------------------------------------------------------------------
+  System of equation
+--------------------------------------------------------------------}
+
+-- |Variable in system of equation.
+type Var = Int
+
+-- |System of equations.
+type SystemOfEquations u = Array Var (Set (Either u Var))
+
+-- |Solution of system of equation.
+type Solution u = Array Var (Set u)
+
+-- |Solve a system of equation.
+solve :: Ord u => SystemOfEquations u -> Solution u
+solve equations = array (bounds equations)
+                  [(i, Set sys (m!i)) | i <- indices equations]
+    where (sys,m)  = mkSystem $ mkTaggedGraphFromEquations equations
+
+-- XXX: 汚いなぁ
+mkTaggedGraphFromEquations
+    :: Ord u => Array Var (Set (Either u Var)) -> TaggedGraph u
+mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
+    where (lb,ub) = bounds equations
+          (ub',l,t) = foldl phi (ub,[],emptyFM) (assocs equations)
+          phi (ub,l,t) (lhs, (Set sys v)) = (ub', l', t')
+              where g = sysGraph sys
+                    m :: Array Var Vertex
+                    m = array (bounds g) m'
+                    ((ub',l',t'), m') = mapAccumL psi (ub,l,t) (assocs g)
+                        where psi (ub,l,t) (x,children)
+                               | v==x =
+                                   ( (ub, (lhs, map (m!) children) : l, t)
+                                   , (x, lhs)
+                                   )
+                               | otherwise =
+                                   case lookupFM (sysTagging sys) x of
+                                   Just (Right v) ->
+                                       ((ub,l,t), (x,v))
+                                   Just (Left u) ->
+                                       ( (ub+1
+                                         , (ub+1,[]) : l
+                                         , addToFM t (ub+1) u)
+                                       , (x, ub+1)
+                                       )
+                                   Nothing ->
+                                       ( ( ub+1
+                                         , (ub+1, map (m!) children) : l
+                                         , t
+                                         )
+                                       , (x, ub+1)
+                                       )
+
+{--------------------------------------------------------------------
+  Accessible Graph
+--------------------------------------------------------------------}
+
+-- |A tagging is a partial map t: G->U that assigns to childless node
+-- of G an element of U.
+type Tagging u = FiniteMap Vertex u
+
+-- |FIXME
+type Decoration u = Table (UrelemOrSet u)
+
+-- |FIXME
+type Picture u = (Graph, Tagging u, Vertex)
+
+-- |FIXME
+-- Every apg has a unique decoration.
+decorate :: (Ord u) => Graph -> Tagging u -> Decoration u
+decorate g t = d
+    where (sys,m) = mkSystem (g,t)
+          d = array (bounds g) [(v, toUrelemOrSet sys (m!v)) | v <- indices g]
+
+-- |FIXME
+picture :: (Ord u) => Set u -> Picture u
+picture (Set sys v) = (sysGraph sys, sysTagging sys, v)
+
+{--------------------------------------------------------------------
+  Implementation
+--------------------------------------------------------------------}
 
 type TaggedGraph u = (Graph, Tagging u)
 
@@ -579,8 +610,9 @@ stabilize g b xs =
                                           )
                                       Nothing    -> (ss, p:ps, qs)
 
------------------------------------------------------------------------------
--- utility
+{--------------------------------------------------------------------
+  Utility functions
+--------------------------------------------------------------------}
 
 -- XXX:
 showSet :: (Show u, Ord u) => Set u -> String
