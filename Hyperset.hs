@@ -93,18 +93,8 @@ instance Ord u => Eq (Set u) where
     s1@(Set sys1 v1) == s2@(Set sys2 v2) =
         sysAttrTable sys1 ! v1 == sysAttrTable sys1 ! v2 &&
         cardinality s1 == cardinality s2 &&
-        isBisimilar s1 s2
-
-isBisimilar :: (Ord u) => Set u -> Set u -> Bool
-isBisimilar s1@(Set sys1 v1) s2@(Set sys2 v2) = m!v1 == m!(v2+offset)
-    where g1 = sysGraph sys1
-          g2 = sysGraph sys2
-          (lb1,ub1) = bounds g1
-          (lb2,ub2) = bounds g2
-          offset = ub1 + 1 - lb2
-          t' = sysTagging sys1 `plusFM` listToFM [(k+offset,e) | (k,e) <- fmToList (sysTagging sys2)]
-          g' = array (lb1,ub2+offset) (assocs g1 ++ [(k+offset, map (offset+) e) | (k,e) <- assocs g2])
-          (_,m) = minimize (g',t')
+        in1!v1 == in2!v2
+        where (sys,in1,in2) = sumSystem sys1 sys2
 
 isWellfounded :: Ord u => Set u -> Bool
 isWellfounded (Set sys v) =
@@ -120,12 +110,31 @@ isEmptySet x = cardinality x == 0
 isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
 
+-- 汚いなぁ
 elementOf :: Ord u => (Either u (Set u)) -> Set u -> Bool
-elementOf x set = x `elem` toList set
+elementOf (Left x) (Set sys v) =
+    any (\y -> lookupFM t y == Just x) (g!v)
+    where t = sysTagging sys
+          g = sysGraph sys
+elementOf (Right s1) (Set sys2 v2) | isEmptySet s1 =
+    any (\y -> null (g!y) && lookupFM t y == Nothing) (g!v)
+    where t = sysTagging sys
+          g = sysGraph sys    
+elementOf (Right (Set sys1 v1)) (Set sys2 v2) =
+    (in1 ! v1) `elem` (g ! (in2 ! v2))
+    where (sys,in1,in2) = sumSystem sys1 sys2
+          g = sysGraph sys
 
 _subsetOf, subsetOf, supersetOf, properSubsetOf, properSupersetOf
     :: Ord u => Set u -> Set u -> Bool
-as `_subsetOf`  bs = and [a `elementOf` bs | a <- toList as]
+
+s1 `_subsetOf` s2 | isEmptySet s1 = True
+(Set sys1 v1) `_subsetOf` (Set sys2 v2) =
+    FS.mkSet (map (in1!) (g1 ! v1)) == FS.mkSet (map (in2!) (g1 ! v2))
+    where g1 = sysGraph sys1
+          g2 = sysGraph sys2
+          (sys,in1,in2) = sumSystem sys1 sys2
+
 as `subsetOf`   bs = cardinality as <= cardinality bs && as `_subsetOf` bs
 as `supersetOf` bs = bs `subsetOf` as
 as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
@@ -310,6 +319,22 @@ mkSystem g t =
           }
     where t' = filterFM (\v _ -> null (g!v)) t
 
+sumSystem :: Ord u => System u -> System u ->
+             (System u, Table Vertex, Table Vertex)
+sumSystem sys1 sys2 = (sys, in1, in2)
+    where g1 = sysGraph sys1
+          g2 = sysGraph sys2
+          (offset, lb, ub) = (ub1 + 1 - lb2, lb1, ub2+offset)
+              where (lb1,ub1) = bounds g1
+                    (lb2,ub2) = bounds g2
+          in1 = array (bounds g1) [(i,m!i) | i <- indices g1]
+          in2 = array (bounds g2) [(i,m!(i+offset)) | i <- indices g2]
+          (sys,m) = normalize (g,t)
+              where g = array (lb,ub) (assocs g1 ++ [(k+offset, map (offset+) e) | (k,e) <- assocs g2])
+                    t = t1 `plusFM` t2
+                        where t1 = sysTagging sys1
+                              t2 = listToFM [(k+offset,e) | (k,e) <- fmToList (sysTagging sys2)]
+
 normalize :: Ord u => TaggedGraph u -> (System u, Table Vertex)
 normalize (g,t) = (mkSystem g' t', m)
     where ((g',t'),m) = minimize (g,t)
@@ -337,9 +362,6 @@ succRank :: Rank -> Rank
 succRank (Rank n)   = Rank (n+1)
 succRank RankNegInf = RankNegInf
 
-rankTable :: Graph -> Table Rank
-rankTable g = fmap snd (attrTable g)
-
 attrTable :: Graph -> Table Attr
 attrTable g = table
     where scc = stronglyConnComp [(x,x,ys) | (x,ys) <- assocs g]
@@ -359,6 +381,10 @@ attrTable g = table
                                     r'     = if wf then succRank r else r]
               where ms = FS.mkSet (concatMap (g!) xs) `FS.minusSet` FS.mkSet xs
 
+{-
+rankTable :: Graph -> Table Rank
+rankTable g = fmap snd (attrTable g)
+
 rankTableTest1 = a==b
     where a = rankTable (array (0,2) [(0,[1,2]), (1,[1]), (2,[])])
           b = array (0,2) [(0,Rank 1),(1,RankNegInf),(2,Rank 0)]
@@ -366,6 +392,7 @@ rankTableTest1 = a==b
 rankTableTest2 = a==b
     where a = rankTable (array (0,4) [(0,[1,2]), (1,[0]), (2,[3,4]), (3,[2]), (4,[]) ])
           b = array (0,4) [(0,Rank 1),(1,Rank 1),(2,Rank 1),(3,Rank 1),(4,Rank 0)]
+-}
 
 -----------------------------------------------------------------------------
 
@@ -392,12 +419,12 @@ apply' g x =
 
 collapse :: G st -> Vertex -> Vertex -> ST st Vertex
 collapse g a' b' =
-    do (a,pa,as) <- apply' g a'
-       (b,pb,bs) <- apply' g b'
+    do (a,pas,as) <- apply' g a'
+       (b,pbs,bs) <- apply' g b'
        if a==b
           then return a
           else do writeArray g a' (Left b')
-                  writeArray g b' (Right (pa `FS.union` pb, as `FS.union` bs))
+                  writeArray g b' (Right (pas `FS.union` pbs, as `FS.union` bs))
                   return b'
 
 collapseList :: G st -> [Vertex] -> ST st Vertex
