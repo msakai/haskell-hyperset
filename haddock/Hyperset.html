@@ -1,0 +1,1380 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!--Rendered using the Haskell Html Library v0.2-->
+<HTML
+><HEAD
+  ><TITLE
+    >Hyperset</TITLE
+    ><LINK HREF = "haddock.css" REL = "stylesheet" TYPE = "text/css"
+    ></HEAD
+  ><BODY
+  ><TABLE CLASS = "vanilla" CELLSPACING = "0" CELLPADDING = "0"
+    ><TR
+      ><TD CLASS = "topbar"
+	><TABLE CLASS = "vanilla" CELLSPACING = "0" CELLPADDING = "0"
+	  ><TR
+	    ><TD
+	      ><IMG SRC = "haskell_icon.gif" WIDTH = "16" HEIGHT = "16" ALT = " "
+		></TD
+	      ><TD CLASS = "title"
+	      ></TD
+	      ><TD CLASS = "topbut"
+	      ><A HREF = "index.html"
+		>Contents</A
+		></TD
+	      ><TD CLASS = "topbut"
+	      ><A HREF = "doc-index.html"
+		>Index</A
+		></TD
+	      ></TR
+	    ></TABLE
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "modulebar"
+	><TABLE CLASS = "vanilla" CELLSPACING = "0" CELLPADDING = "0"
+	  ><TR
+	    ><TD
+	      ><FONT SIZE = "6"
+		>Hyperset</FONT
+		></TD
+	      ><TD ALIGN = "right"
+	      ><TABLE CLASS = "narrow" CELLSPACING = "0" CELLPADDING = "0"
+		><TR
+		  ><TD CLASS = "infohead"
+		    >Portability</TD
+		    ><TD CLASS = "infoval"
+		    >  portable</TD
+		    ></TR
+		  ><TR
+		  ><TD CLASS = "infohead"
+		    >Stability</TD
+		    ><TD CLASS = "infoval"
+		    >  unstable</TD
+		    ></TR
+		  ><TR
+		  ><TD CLASS = "infohead"
+		    >Maintainer</TD
+		    ><TD CLASS = "infoval"
+		    >  sakai@tom.sfc.keio.ac.jp</TD
+		    ></TR
+		  ></TABLE
+		></TD
+	      ></TR
+	    ></TABLE
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD
+	><TABLE CLASS = "vanilla" CELLSPACING = "0" CELLPADDING = "0"
+	  ><TR
+	    ><TD CLASS = "section4"
+	      ><B
+		>Contents</B
+		></TD
+	      ></TR
+	    ><TR
+	    ><TD
+	      ><DL
+		><DT
+		  ><A HREF = "#1"
+		    >The <TT
+		      >Set</TT
+		      > type</A
+		    ></DT
+		  ><DT
+		  ><A HREF = "#2"
+		    >Operators</A
+		    ></DT
+		  ><DT
+		  ><A HREF = "#3"
+		    >Inspection</A
+		    ></DT
+		  ><DT
+		  ><A HREF = "#4"
+		    >Construction</A
+		    ></DT
+		  ><DT
+		  ><A HREF = "#5"
+		    >System of equations</A
+		    ></DT
+		  ><DT
+		  ><A HREF = "#6"
+		    >Accessible Graph.</A
+		    ></DT
+		  ><DT
+		  ><A HREF = "#7"
+		    >Conversion</A
+		    ></DT
+		  ><DD
+		  ><DL
+		    ><DT
+		      ><A HREF = "#8"
+			>List</A
+			></DT
+		      ></DL
+		    ></DD
+		  ></DL
+		></TD
+	      ></TR
+	    ></TABLE
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	>Description</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>An implementation of hypersets.
+</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	>Synopsis</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "body"
+	><TABLE CLASS = "vanilla" CELLSPACING = "0" CELLPADDING = "0"
+	  ><TR
+	    ><TD CLASS = "decl"
+	      ><SPAN CLASS = "keyword"
+		>data</SPAN
+		> <A HREF = "#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><SPAN CLASS = "keyword"
+		>type</SPAN
+		> <A HREF = "#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u = Either u (<A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u)</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3A%5C%5C"
+		>(\\)</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3AisWellfounded"
+		>isWellfounded</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Bool</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Acardinality"
+		>cardinality</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Int</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3AisEmpty"
+		>isEmpty</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Bool</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3AisSingleton"
+		>isSingleton</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Bool</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Amember"
+		>member</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Bool</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Asubset"
+		>subset</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Bool</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Asuperset"
+		>superset</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Bool</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3AproperSubset"
+		>properSubset</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Bool</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3AproperSuperset"
+		>properSuperset</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; Bool</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Aatom"
+		>atom</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Aempty"
+		>empty</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Asingleton"
+		>singleton</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Apowerset"
+		>powerset</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Aunion"
+		>union</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Aintersection"
+		>intersection</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Adifference"
+		>difference</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3AequivClass"
+		>equivClass</A
+		> :: Ord u =&gt; (<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u -&gt; Bool) -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Aseparate"
+		>separate</A
+		> :: Ord u =&gt; (<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u -&gt; Bool) -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><SPAN CLASS = "keyword"
+		>type</SPAN
+		> <A HREF = "#t%3ASystemOfEquations"
+		>SystemOfEquations</A
+		> u = Array <A HREF = "Hyperset.html#t%3AVar"
+		>Var</A
+		> (<A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> (Either u <A HREF = "Hyperset.html#t%3AVar"
+		>Var</A
+		>))</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><SPAN CLASS = "keyword"
+		>type</SPAN
+		> <A HREF = "#t%3AVar"
+		>Var</A
+		> = Int</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><SPAN CLASS = "keyword"
+		>type</SPAN
+		> <A HREF = "#t%3ASolution"
+		>Solution</A
+		> u = Array <A HREF = "Hyperset.html#t%3AVar"
+		>Var</A
+		> (<A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u)</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Asolve"
+		>solve</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASystemOfEquations"
+		>SystemOfEquations</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ASolution"
+		>Solution</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><SPAN CLASS = "keyword"
+		>type</SPAN
+		> <A HREF = "#t%3ATagging"
+		>Tagging</A
+		> u = FiniteMap Vertex u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><SPAN CLASS = "keyword"
+		>type</SPAN
+		> <A HREF = "#t%3ADecoration"
+		>Decoration</A
+		> u = Table (<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u)</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Adecorate"
+		>decorate</A
+		> :: Ord u =&gt; Graph -&gt; <A HREF = "Hyperset.html#t%3ATagging"
+		>Tagging</A
+		> u -&gt; <A HREF = "Hyperset.html#t%3ADecoration"
+		>Decoration</A
+		> u</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3Apicture"
+		>picture</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; (Graph, Vertex, <A HREF = "Hyperset.html#t%3ATagging"
+		>Tagging</A
+		> u)</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3AtoList"
+		>toList</A
+		> :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u -&gt; [<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u]</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "s8"
+	      ></TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "decl"
+	      ><A HREF = "#v%3AfromList"
+		>fromList</A
+		> :: Ord u =&gt; [<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+		>UrelemOrSet</A
+		> u] -&gt; <A HREF = "Hyperset.html#t%3ASet"
+		>Set</A
+		> u</TD
+	      ></TR
+	    ></TABLE
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	><A NAME = "1"
+	  >The <TT
+	    >Set</TT
+	    > type</A
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><SPAN CLASS = "keyword"
+	  >data</SPAN
+	  > <A NAME = "t%3ASet"
+	  ></A
+	  ><B
+	  >Set</B
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "body"
+	><TABLE CLASS = "vanilla" CELLSPACING = "0" CELLPADDING = "0"
+	  ><TR
+	    ><TD CLASS = "ndoc"
+	      >Set with urelements from <TT
+		>u</TT
+		>.</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "section4"
+	      >Instances</TD
+	      ></TR
+	    ><TR
+	    ><TD CLASS = "body"
+	      ><TABLE CLASS = "vanilla" CELLSPACING = "1" CELLPADDING = "0"
+		><TR
+		  ><TD CLASS = "decl"
+		    >Ord u =&gt; Eq (<A HREF = "Hyperset.html#t%3ASet"
+		      >Set</A
+		      > u)</TD
+		    ></TR
+		  ><TR
+		  ><TD CLASS = "decl"
+		    >(Ord u, Show u) =&gt; Show (<A HREF = "Hyperset.html#t%3ASet"
+		      >Set</A
+		      > u)</TD
+		    ></TR
+		  ></TABLE
+		></TD
+	      ></TR
+	    ></TABLE
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><SPAN CLASS = "keyword"
+	  >type</SPAN
+	  > <A NAME = "t%3AUrelemOrSet"
+	  ></A
+	  ><B
+	  >UrelemOrSet</B
+	  > u = Either u (<A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u)</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Urelemnt or set.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	><A NAME = "2"
+	  >Operators</A
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3A%5C%5C"
+	  ></A
+	  ><B
+	  >(\\)</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>See <TT
+	  ><A HREF = "Hyperset.html#v%3Adifference"
+	    >difference</A
+	    ></TT
+	  >.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	><A NAME = "3"
+	  >Inspection</A
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3AisWellfounded"
+	  ></A
+	  ><B
+	  >isWellfounded</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Bool</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Is this a well-founded set?</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Acardinality"
+	  ></A
+	  ><B
+	  >cardinality</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Int</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>The number of elements in the set.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3AisEmpty"
+	  ></A
+	  ><B
+	  >isEmpty</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Bool</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Is this the empty set?</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3AisSingleton"
+	  ></A
+	  ><B
+	  >isSingleton</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Bool</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Is this a singleton set?.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Amember"
+	  ></A
+	  ><B
+	  >member</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3AUrelemOrSet"
+	  >UrelemOrSet</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Bool</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Is the element in the set?</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Asubset"
+	  ></A
+	  ><B
+	  >subset</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Bool</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Is this a subset?
+<TT
+	  >(s1 `subset` s2)</TT
+	  > tells whether s1 is a subset of s2.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Asuperset"
+	  ></A
+	  ><B
+	  >superset</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Bool</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Is this superset?
+<TT
+	  >(s1 `superset` s2)</TT
+	  > tells whether s1 is a superset of s2.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3AproperSubset"
+	  ></A
+	  ><B
+	  >properSubset</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Bool</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Is this a proper subset?
+<TT
+	  >(s1 `properSubset` s2)</TT
+	  > tells whether s1 is a proper subset of s2.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3AproperSuperset"
+	  ></A
+	  ><B
+	  >properSuperset</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; Bool</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Is this a proper subset?
+<TT
+	  >(s1 `properSuperset` s2)</TT
+	  > tells whether s1 is a proper superset of s2.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	><A NAME = "4"
+	  >Construction</A
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Aatom"
+	  ></A
+	  ><B
+	  >atom</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Quine's atom: Ω={Ω}.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Aempty"
+	  ></A
+	  ><B
+	  >empty</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>The empty set.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Asingleton"
+	  ></A
+	  ><B
+	  >singleton</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3AUrelemOrSet"
+	  >UrelemOrSet</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Create a singleton set.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Apowerset"
+	  ></A
+	  ><B
+	  >powerset</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>The powerset of the set.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Aunion"
+	  ></A
+	  ><B
+	  >union</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>The union of two sets.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Aintersection"
+	  ></A
+	  ><B
+	  >intersection</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>The intersection of two sets.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Adifference"
+	  ></A
+	  ><B
+	  >difference</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>The difference of two sets.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3AequivClass"
+	  ></A
+	  ><B
+	  >equivClass</B
+	  > :: Ord u =&gt; (<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+	  >UrelemOrSet</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3AUrelemOrSet"
+	  >UrelemOrSet</A
+	  > u -&gt; Bool) -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>The quotient set by the equivalent relation.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Aseparate"
+	  ></A
+	  ><B
+	  >separate</B
+	  > :: Ord u =&gt; (<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+	  >UrelemOrSet</A
+	  > u -&gt; Bool) -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Filter all elements that satisfy the predicate.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	><A NAME = "5"
+	  >System of equations</A
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><SPAN CLASS = "keyword"
+	  >type</SPAN
+	  > <A NAME = "t%3ASystemOfEquations"
+	  ></A
+	  ><B
+	  >SystemOfEquations</B
+	  > u = Array <A HREF = "Hyperset.html#t%3AVar"
+	  >Var</A
+	  > (<A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > (Either u <A HREF = "Hyperset.html#t%3AVar"
+	  >Var</A
+	  >))</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>System of equations in X is a family of family of equations
+{x = a_x | x∈X}, exactly one equation for each indeterminant
+x∈X⊆<TT
+	  >Var</TT
+	  >.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><SPAN CLASS = "keyword"
+	  >type</SPAN
+	  > <A NAME = "t%3AVar"
+	  ></A
+	  ><B
+	  >Var</B
+	  > = Int</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Indeterminant in system of equation.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><SPAN CLASS = "keyword"
+	  >type</SPAN
+	  > <A NAME = "t%3ASolution"
+	  ></A
+	  ><B
+	  >Solution</B
+	  > u = Array <A HREF = "Hyperset.html#t%3AVar"
+	  >Var</A
+	  > (<A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u)</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Solution of system of equation.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Asolve"
+	  ></A
+	  ><B
+	  >solve</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASystemOfEquations"
+	  >SystemOfEquations</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ASolution"
+	  >Solution</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Solve a system of equation.
+By the solution lemma, every system of equations has a unique solution.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	><A NAME = "6"
+	  >Accessible Graph.</A
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><SPAN CLASS = "keyword"
+	  >type</SPAN
+	  > <A NAME = "t%3ATagging"
+	  ></A
+	  ><B
+	  >Tagging</B
+	  > u = FiniteMap Vertex u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Let G be an accessible graph, and let U={φ}∪<TT
+	  >u</TT
+	  > be a collection
+containing the empty set and urelements. A tagging of G is a function
+t: G-&gt;U that assigns to each childless node of G an element of U.
+And we interpret <TT
+	  >lookupFM t n == Nothing</TT
+	  > for a childless node n of G 
+as t(v)=φ.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><SPAN CLASS = "keyword"
+	  >type</SPAN
+	  > <A NAME = "t%3ADecoration"
+	  ></A
+	  ><B
+	  >Decoration</B
+	  > u = Table (<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+	  >UrelemOrSet</A
+	  > u)</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	><P
+	  >A decoration is a function d defined on each node n of G such that
+</P
+	  ><UL
+	  ><LI
+	    > d(n) = t(n) (if n is childless) 
+</LI
+	    ><LI
+	    > d(n) = {d(m) | m∈children(n)}
+</LI
+	    ></UL
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Adecorate"
+	  ></A
+	  ><B
+	  >decorate</B
+	  > :: Ord u =&gt; Graph -&gt; <A HREF = "Hyperset.html#t%3ATagging"
+	  >Tagging</A
+	  > u -&gt; <A HREF = "Hyperset.html#t%3ADecoration"
+	  >Decoration</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>compute the decoration.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3Apicture"
+	  ></A
+	  ><B
+	  >picture</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; (Graph, Vertex, <A HREF = "Hyperset.html#t%3ATagging"
+	  >Tagging</A
+	  > u)</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Tagged apg(accessible pointed graph) that pictures the set.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section1"
+	><A NAME = "7"
+	  >Conversion</A
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "section2"
+	><A NAME = "8"
+	  >List</A
+	  ></TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3AtoList"
+	  ></A
+	  ><B
+	  >toList</B
+	  > :: Ord u =&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u -&gt; [<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+	  >UrelemOrSet</A
+	  > u]</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>The elements of a set.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "decl"
+	><A NAME = "v%3AfromList"
+	  ></A
+	  ><B
+	  >fromList</B
+	  > :: Ord u =&gt; [<A HREF = "Hyperset.html#t%3AUrelemOrSet"
+	  >UrelemOrSet</A
+	  > u] -&gt; <A HREF = "Hyperset.html#t%3ASet"
+	  >Set</A
+	  > u</TD
+	></TR
+      ><TR
+      ><TD CLASS = "doc"
+	>Create a set from a list of elements.</TD
+	></TR
+      ><TR
+      ><TD CLASS = "s15"
+	></TD
+	></TR
+      ><TR
+      ><TD CLASS = "botbar"
+	>Produced by <A HREF = "http://www.haskell.org/haddock/"
+	  >Haddock</A
+	  > version 0.6</TD
+	></TR
+      ></TABLE
+    ></BODY
+  ></HTML
+>
