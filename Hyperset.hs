@@ -24,8 +24,8 @@ module Hyperset
 
     , powerset
     , union
-    , intersect
-    , minus
+    , intersection
+    , difference
     , separate
     , mapSet
 
@@ -179,15 +179,17 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
 
 -- XXX: 汚いなぁ
 powerset :: Ord u => Set u -> Set u
-powerset (Set sys v) = constructSet (g',t) qs v'
+powerset s@(Set sys v) = constructSet (g',t) qs v'
     where g = sysGraph sys
           t = sysTagging sys
           (lb,ub) = bounds g
-          v'  = ub + 1
-          ub' = v' + length p
-          p   = zip [(v'+1)..] (powerList (g!v))
-          g'  = array (lb, ub') ((v', [a | (a,_) <- p]) : p ++ assocs g)
-          qs = [[i] | i <- indices g] : [ [[i]] | i <- [ub+1..ub'] ]
+          v' = ub + length p + 1
+          p  = zip [(ub+1)..] (powerList (g!v))
+          g' = array (lb, v') ((v', map fst p) : p ++ assocs g)
+          qs = [ [[v']]
+               , [[i] | (i,_) <- p ]
+               , [[i] | i <- indices g]
+               ]
 
 -- XXX: 汚いなぁ
 union :: Ord u => Set u -> Set u -> Set u
@@ -207,17 +209,17 @@ union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) qs v
               where t1 = sysTagging sys1
                     t2 = sysTagging sys2
           qs = [ [[v]]
-               , [[i] | i <- indices g1]
+               , [[i]     | i <- indices g1]
                , [[i+off] | i <- indices g2]
                ]
 
 -- unionManySets :: Ord u => Set u -> Set u
 
-intersect :: Ord u => Set u -> Set u -> Set u
-a `intersect` b = separate (\x -> x `elementOf` b) a
+intersection :: Ord u => Set u -> Set u -> Set u
+a `intersection` b = separate (\x -> x `elementOf` b) a
 
-minus :: Ord u => Set u -> Set u -> Set u
-a `minus` b = separate (\x -> not (x `elementOf` b)) a
+difference :: Ord u => Set u -> Set u -> Set u
+a `difference` b = separate (\x -> not (x `elementOf` b)) a
 
 -- equivClass (\(Left n) (Left m) -> n `mod` 3 == m `mod` 3) (fromList [Left 1, Left 2, Left 3, Left 4])
 equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
@@ -225,11 +227,14 @@ equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) qs v'
     where f' a b = f (wrap sys a) (wrap sys b)
           g = sysGraph sys
-          l = zip [ub+1..] (classifyList f' (g ! v) [])
+          l = zip [ub+1..] (classify f' (g ! v))
           (lb,ub) = bounds (sysGraph sys)
           v' = ub + length l + 1
           g' = array (lb, v') ((v', map fst l) : l ++ assocs g)
-          qs = [ [[i] | i <- indices g], [[v']] ] ++ [[[i]] | (i,_) <- l]
+          qs = [ [[v']]
+               , [[i] | (i,_) <- l]
+               , [[i] | i <- indices g]
+               ]
 
 -- filter という名前の方がよい?
 separate :: Ord u => (Either u (Set u) -> Bool) -> (Set u -> Set u)
@@ -241,7 +246,9 @@ separate f s@(Set sys v) =
           g'  = array (lb,ub+1) (foo : assocs g)
               where foo = (v', [child | child <- g!v, f (wrap sys child)])
           v'  = ub+1
-          qs  = [ [[v']], [[i] | i <- indices g] ]
+          qs  = [ [[v']]
+                , [[i] | i <- indices g]
+                ]
 
 -- partition :: Ord u => (Either u (Set u) -> Bool) -> Set u -> (Set u, Set u)
 
@@ -291,7 +298,7 @@ normalize (g,t) qs = (mkSystem g' t', m)
           t' = listToFM [(m!v,u) | (v,u) <- fmToList t]
           m  = array (bounds g) [(x,i) | (i,xs) <- c, x <- xs]
           c  = zip [0..] (mergeQuoSets eq qs)
-              where eq n m = take len (rt!n) == take len (rt!m)
+              where eq a b = take len (rt!a) == take len (rt!b)
                     rt     = reachabilityTable g t
                     len    = rangeSize (bounds g)
 
@@ -341,14 +348,11 @@ mergeQuoSet2 eq = foldl phi
                                | otherwise      = e2 : g e2s
                     r = head e1
 
-classify :: (a -> a -> Bool) -> a -> [[a]] -> [[a]]
-classify f x c = g c
-    where g []     = [[x]]
-          g (s:ss) | f (head s) x = (x:s) : ss
-                   | otherwise    = s : g ss
-
-classifyList :: (a -> a -> Bool) -> [a] -> [[a]] -> [[a]]
-classifyList f xs c = foldl (flip (classify f)) c xs
+classify :: (a -> a -> Bool) -> [a] -> [[a]]
+classify f = foldl phi []
+    where phi (s:ss) x | f (head s) x = (x:s) : ss
+                       | otherwise    = s : phi ss x
+          phi [] x = [[x]]
 
 zipWith' :: (a -> a -> a) -> [a] -> [a] -> [a]
 zipWith' f = g
