@@ -1,15 +1,15 @@
 module Hyperset
     ( Set
-
+    , UrelemOrSet
+    , Var
+    , SystemOfEquation
+    , Solution
     , atom
     , emptySet
     , singleton
-    , Var
     , solve
-
     , toList
     , fromList
-
     , powerset
     , union
     , intersection
@@ -17,7 +17,6 @@ module Hyperset
     , equivClass
     , separate
     -- , mapSet
-
     , member
     , subsetOf
     , supersetOf
@@ -46,6 +45,19 @@ import Debug.QuickCheck
 -- |A set. (FIXME)
 data Ord u => Set u = Set !(System u) !Vertex deriving Show
 
+-- Set u のsupertypeとして定義できたらいいのになぁ。
+-- |FIXME
+type UrelemOrSet u = Either u (Set u)
+
+-- |FIXME
+type Var                = Int
+
+-- |FIXME
+type SystemOfEquation u = Array Var (Set (Either u Var))
+
+-- |FIXME
+type Solution u         = Array Var (Set u)
+
 instance Ord u => Eq (Set u) where
     s1@(Set sys1 v1) == s2@(Set sys2 v2) =
         sysAttrTable sys1 ! v1 == sysAttrTable sys2 ! v2 &&
@@ -71,17 +83,17 @@ isWellfounded (Set sys v) =
 cardinality :: Ord u => Set u -> Int
 cardinality (Set sys v) = length (sysGraph sys ! v)
 
--- |Returns True if the set is the empty set.
+-- |True if the set is the empty set.
 isEmptySet :: Ord u => Set u -> Bool
 isEmptySet x = cardinality x == 0
 
--- |Returns True if the set is the empty singleton.
+-- |True if the set is a singleton.
 isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
 
 -- 汚いなぁ
 -- |Is the element in the set?
-member :: Ord u => (Either u (Set u)) -> Set u -> Bool
+member :: Ord u => (UrelemOrSet u) -> Set u -> Bool
 member (Left x) (Set sys v) =
     any (\y -> lookupFM t y == Just x) (g!v)
     where t = sysTagging sys
@@ -109,11 +121,20 @@ s `_subsetOf` _ | isEmptySet s = True
 -- |Is this a subset?
 -- (s1 `subsetOf` s2) tells whether s1 is a subset of s2.
 as `subsetOf`   bs = cardinality as <= cardinality bs && as `_subsetOf` bs
+
+-- |Is this superset?
+-- (s1 `supersetOf` s2) tells whether s1 is a superset of s2.
 as `supersetOf` bs = bs `subsetOf` as
+
+-- |Is this a proper subset?
+-- (s1 `propertSubsetOf` s2) tells whether s1 is a proper subset of s2.
 as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
+
+-- |Is this a proper subset?
+-- (s1 `propertSupersetOf` s2) tells whether s1 is a proper superset of s2.
 as `properSupersetOf` bs = bs `properSubsetOf` as
 
-toSetOrElem :: Ord u => System u -> Vertex -> Either u (Set u)
+toSetOrElem :: Ord u => System u -> Vertex -> UrelemOrSet u
 toSetOrElem sys v = case lookupFM (sysTagging sys) v of
                     Just e  -> Left e
                     Nothing -> Right (Set sys v)
@@ -129,11 +150,11 @@ atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
 
 -- elems って名前の方がよい?
 -- |The elements of a set.
-toList :: Ord u => Set u -> [Either u (Set u)]
+toList :: Ord u => Set u -> [UrelemOrSet u]
 toList (Set sys v) = map (toSetOrElem sys) (sysGraph sys ! v)
 
 -- |Create a set from a list of elements.
-fromList :: Ord u => [Either u (Set u)] -> Set u
+fromList :: Ord u => [UrelemOrSet u] -> Set u
 fromList xs = constructSet (array (0,n) ((n,children):l), t) n
     where ((n,l,t), children) = mapAccumL phi (0,[],emptyFM) xs
           phi (n,l,t) (Left u) =
@@ -151,13 +172,11 @@ emptySet :: Ord u => Set u
 emptySet = fromList []
 
 -- |Create a singleton set.
-singleton :: Ord u => Either u (Set u) -> Set u
+singleton :: Ord u => UrelemOrSet u -> Set u
 singleton u = fromList [u]
 
-type Var = Int
-
--- |FIXME
-solve :: Ord u => Array Var (Set (Either u Var)) -> Array Var (Set u)
+-- |Solve a system of equation.
+solve :: Ord u => SystemOfEquation u -> Solution u
 solve equations = array (bounds equations)
                   [(i, Set sys (m!i)) | i <- indices equations]
     where (sys,m)  = mkSystem $ mkTaggedGraphFromEquations equations
@@ -198,7 +217,7 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
 
 -- XXX: 汚いなぁ
 -- |The powerset of the set.
-powerset :: (Show u, Ord u) => Set u -> Set u
+powerset :: (Ord u) => Set u -> Set u
 powerset (Set sys v) = constructSet (g',t) v'
     where g = sysGraph sys
           t = sysTagging sys
@@ -212,7 +231,7 @@ powerList = foldr phi [[]]
     where phi a xs = map (a:) xs ++ xs
 
 -- XXX: 汚いなぁ
--- |The union of the two sets.
+-- |The union of two sets.
 union :: Ord u => Set u -> Set u -> Set u
 union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
     where g1 = sysGraph sys1
@@ -233,17 +252,17 @@ union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
 -- unionManySets :: Ord u => Set u -> Set u
 
 -- 効率が悪い
--- |The intersection of the two sets.
+-- |The intersection of two sets.
 intersection :: Ord u => Set u -> Set u -> Set u
 a `intersection` b = separate (\x -> x `member` b) a
 
 -- 効率が悪い
--- |The difference of the two sets.
+-- |The difference of two sets.
 difference :: Ord u => Set u -> Set u -> Set u
 a `difference` b = separate (\x -> not (x `member` b)) a
 
 -- |The quotient set by the equivalent relation.
-equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
+equivClass :: Ord u => (UrelemOrSet u -> UrelemOrSet u -> Bool) ->
                        (Set u -> Set u)
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
     where f' a b = f (toSetOrElem sys a) (toSetOrElem sys b)
@@ -260,7 +279,7 @@ classifyList f = foldl phi []
           phi [] x = [[x]]
 
 -- |Filter all elements that satisfy the predicate.
-separate :: Ord u => (Either u (Set u) -> Bool) -> (Set u -> Set u)
+separate :: Ord u => (UrelemOrSet u -> Bool) -> (Set u -> Set u)
 separate f (Set sys v) =
     constructSet (g',t) v'
     where g = sysGraph sys
@@ -270,11 +289,11 @@ separate f (Set sys v) =
               where foo = (v', [child | child <- g!v, f (toSetOrElem sys child)])
           v'  = ub+1
 
--- partition :: Ord u => (Either u (Set u) -> Bool) -> Set u -> (Set u, Set u)
+-- partition :: Ord u => (UrelemOrSet u -> Bool) -> Set u -> (Set u, Set u)
 
 {-
 mapSet :: (Ord u, Ord u') =>
-          (Either u (Set u) -> Either u' (Set u')) -> (Set u -> Set u')
+          (UrelemOrSet u -> UrelemOrSet u') -> (Set u -> Set u')
 mapSet f = fromList . map f . toList
 -}
 
