@@ -12,9 +12,19 @@ prop_propersubsetIsSubset (x, y :: Set Int) =
 prop_toList (x :: Set Int) = fromList (toList x) == x
 
 prop_unionSize (x, y :: Set Int) =
-    cardinality (x `union` y) <= cardinality x + cardinality y
-prop_unionInclusion1 (x, y :: Set Int) = x `subsetOf` (x `union` y)
-prop_unionInclusion2 (x,y :: Set Int)  = y `subsetOf` (x `union` y)
+    cardinality (x `union` y) <= cardinality x + cardinality y &&
+    cardinality x <= cardinality (x `union` y) &&
+    cardinality y <= cardinality (x `union` y)
+    
+prop_unionInclusion (x, y :: Set Int) = x `subsetOf` z && y `subsetOf` z
+    where z = x `union` y
+
+prop_intersectionSize (x, y :: Set Int) = 
+    cardinality (x `intersection` y) <= cardinality x &&
+    cardinality (x `intersection` y) <= cardinality y
+prop_intersectionInclusion (x, y :: Set Int) = z `subsetOf` x && z `subsetOf` y
+    where z = x `intersection` y
+
 
 -- 時間がかかり過ぎないようにサイズを予め制限しておく
 prop_powersetSize (x :: Set Int) =

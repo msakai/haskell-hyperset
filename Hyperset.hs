@@ -55,7 +55,7 @@ instance Ord u => Eq (Set u) where
 instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
     arbitrary = do sys <- arbitrary
                    v <- choose (bounds (sysGraph sys))
-                   case wrap sys v of
+                   case toSetOrElem sys v of
                        Left _    -> arbitrary
                        Right set -> return set
 
@@ -104,23 +104,21 @@ as `supersetOf` bs = bs `subsetOf` as
 as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
 as `properSupersetOf` bs = bs `properSubsetOf` as
 
-wrap :: Ord u => System u -> Vertex -> Either u (Set u)
-wrap sys v = case lookupFM (sysTagging sys) v of
-             Just e  -> Left e
-             Nothing -> Right (Set sys v)
+toSetOrElem :: Ord u => System u -> Vertex -> Either u (Set u)
+toSetOrElem sys v = case lookupFM (sysTagging sys) v of
+                    Just e  -> Left e
+                    Nothing -> Right (Set sys v)
 
 constructSet :: Ord u => TaggedGraph u -> Vertex -> Set u
-constructSet tg v = case wrap sys (m!v) of
-                    Right set -> set
-                    --Left _ -> error "shouldn't happen"
-    where (sys,m) = normalize tg
+constructSet tg v = Set sys (m!v)
+    where (sys,m) = mkSystem tg
 
 atom :: Ord u => Set u
 atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
 
 -- elems って名前の方がよい?
 toList :: Ord u => Set u -> [Either u (Set u)]
-toList (Set sys v) = map (wrap sys) (sysGraph sys ! v)
+toList (Set sys v) = map (toSetOrElem sys) (sysGraph sys ! v)
 
 fromList :: Ord u => [Either u (Set u)] -> Set u
 fromList xs = constructSet (array (0,n) ((n,children):l), t) n
@@ -145,10 +143,8 @@ type Var = Int
 
 solve :: Ord u => Array Var (Set (Either u Var)) -> Array Var (Set u)
 solve equations = array (bounds equations)
-                  [(i,x)
-                   | i <- indices equations
-                   , let Right x = wrap sys (m!i)]
-    where (sys,m)  = normalize $ mkTaggedGraphFromEquations equations
+                  [(i, Set sys (m!i)) | i <- indices equations]
+    where (sys,m)  = mkSystem $ mkTaggedGraphFromEquations equations
 
 -- XXX: 汚いなぁ
 mkTaggedGraphFromEquations
@@ -229,7 +225,7 @@ a `difference` b = separate (\x -> not (x `member` b)) a
 equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
                        (Set u -> Set u)
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
-    where f' a b = f (wrap sys a) (wrap sys b)
+    where f' a b = f (toSetOrElem sys a) (toSetOrElem sys b)
           g = sysGraph sys
           l = zip [ub+1..] (classifyList f' (g ! v))
           (lb,ub) = bounds (sysGraph sys)
@@ -250,7 +246,7 @@ separate f (Set sys v) =
           t = sysTagging sys
           (lb,ub) = bounds g
           g'  = array (lb,ub+1) (foo : assocs g)
-              where foo = (v', [child | child <- g!v, f (wrap sys child)])
+              where foo = (v', [child | child <- g!v, f (toSetOrElem sys child)])
           v'  = ub+1
 
 -- partition :: Ord u => (Either u (Set u) -> Bool) -> Set u -> (Set u, Set u)
@@ -287,7 +283,7 @@ instance (Ord u, Arbitrary u) => Arbitrary (System u) where
                          let g = array (0,ub) xs
                          ys <- foldM h [] [i | (i,children)<-xs, null children]
                          let t = listToFM ys
-                             (sys,m) = normalize (g,t)
+                             (sys,m) = mkSystem (g,t)
                          return sys
               f ub x =
                   do y <- choose (0, (ub+1)*2)
@@ -300,13 +296,14 @@ instance (Ord u, Arbitrary u) => Arbitrary (System u) where
                         else do e <- arbitrary
                                 return ((x,e) : as)
 
-mkSystem :: Ord u => Graph -> Tagging u -> System u
-mkSystem g t =
-    System{ sysGraph      = g
-          , sysTagging    = t'
-          , sysAttrTable  = attrTable g
-          }
-    where t' = filterFM (\v _ -> null (g!v)) t
+mkSystem :: Ord u => TaggedGraph u -> (System u, Table Vertex)
+mkSystem (g,t) = (sys, m)
+    where ((g',t'),m) = minimize (g,t)
+	  sys = System
+		{ sysGraph      = g'
+		, sysTagging    = filterFM (\v _ -> null (g' ! v)) t'
+		, sysAttrTable  = attrTable g'
+		}
 
 sumSystem :: Ord u => System u -> System u ->
              (System u, Table Vertex, Table Vertex)
@@ -318,15 +315,11 @@ sumSystem sys1 sys2 = (sys, in1, in2)
                     (lb2,ub2) = bounds g2
           in1 = array (bounds g1) [(i,m!i) | i <- indices g1]
           in2 = array (bounds g2) [(i,m!(i+offset)) | i <- indices g2]
-          (sys,m) = normalize (g,t)
+          (sys,m) = mkSystem (g,t)
               where g = array (lb,ub) (assocs g1 ++ [(k+offset, map (offset+) e) | (k,e) <- assocs g2])
                     t = t1 `plusFM` t2
                         where t1 = sysTagging sys1
                               t2 = listToFM [(k+offset,e) | (k,e) <- fmToList (sysTagging sys2)]
-
-normalize :: Ord u => TaggedGraph u -> (System u, Table Vertex)
-normalize (g,t) = (mkSystem g' t', m)
-    where ((g',t'),m) = minimize (g,t)
 
 -----------------------------------------------------------------------------
 
@@ -524,10 +517,6 @@ stabilize g b xs =
 
 -----------------------------------------------------------------------------
 -- utility
-
--- XXX:
-instance (Ord k, Show k, Show e) => Show (FiniteMap k e) where
-    showsPrec d fm = showsPrec d (fmToList fm)
 
 -- XXX:
 showSet :: (Show u, Ord u) => Set u -> String
