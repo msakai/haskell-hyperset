@@ -19,19 +19,23 @@ test1 = powerset test0
 test2 :: Set Int
 test2 = powerset test1
 
+-- これを実用的な計算量で計算できるようにしたいなぁ。
+hoge :: Set ()
+hoge = powerset $ powerset $ powerset $ powerset atom
+
 -- Trueになるべきだけど、現在はFalseになってしまう
 testSolve :: Bool
 testSolve = solutions!0 /= solutions!1
     where solutions = solve eqns
           eqns = array (0,1)
-		 [ (0, fromList [ Right emptySet
-				, Right (fromList [Left $ Left 0])
-				, Right (fromList [Left $ Left 0, Left $ Left 1])
-				])
-		 , (1, fromList [ Right emptySet
-				, Right (fromList [Left $ Left 0, Left $ Left 1])
-				] )
-		 ]
+                 [ (0, fromList [ Right emptySet
+                                , Right (fromList [Left $ Left 0])
+                                , Right (fromList [Left $ Left 0, Left $ Left 1])
+                                ])
+                 , (1, fromList [ Right emptySet
+                                , Right (fromList [Left $ Left 0, Left $ Left 1])
+                                ] )
+                 ]
 
 main :: IO ()
 main =

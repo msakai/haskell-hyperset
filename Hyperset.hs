@@ -341,8 +341,8 @@ mergeQuoSets eq = foldl (mergeQuoSet2 eq) []
 
 -- mergeQuoSet2 E A/E B/E = (A∪B)/E
 mergeQuoSet2 :: (a -> a -> Bool) -> QuoSet a -> QuoSet a -> QuoSet a
-mergeQuoSet2 eq a b = restEquivs ++ newEquivs
-    where (restEquivs, newEquivs) = mapAccumL phi a b
+mergeQuoSet2 eq qa qb = restEquivs ++ newEquivs
+    where (restEquivs, newEquivs) = mapAccumL phi qa qb
           -- phi :: QuoSet a -> EquivClass a -> (QuoSet a, EquivClass a)
           phi qa e1 = g qa
               where r = head e1
