@@ -90,7 +90,7 @@ s1 \\ s2 = s1 `difference` s2
   Set type
 --------------------------------------------------------------------}
 
--- |Set with urelements from @u@.
+-- |Set with urelemente from @u@.
 data Ord u => Set u = Set !(System u) !Vertex
 
 -- |Urelemnt or set.
@@ -350,7 +350,7 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
 --------------------------------------------------------------------}
 
 -- |Let G be an accessible graph, and let U={φ}∪@u@ be a collection
--- containing the empty set and urelements. A tagging of G is a function
+-- containing the empty set and urelemente. A tagging of G is a function
 -- t: G->U that assigns to each childless node of G an element of U.
 -- For a childless node v of G, we interpret @lookupFM t v == Just u@
 -- as t(v)=u, @lookupFM t v == Just u@ as t(v)=φ.
@@ -499,7 +499,9 @@ attrTable g = table
     where table = array (bounds g)
                   [(x,(wf,rank)) | (xs,wf,rank) <- sccInfo, x <- IS.toList xs]
           gS = fmap IS.fromList g
+          sccInfo :: [(IS.IntSet, Bool, Rank)]
           sccInfo = map f (scc g)
+          f :: Tree Vertex -> (IS.IntSet, Bool, Rank)
           f scc = (sccS, wf, rank)
               where sccL = flatten scc
                     sccS = IS.fromList sccL
@@ -524,20 +526,41 @@ attrTable g = table
 type Block = IS.IntSet
 type Partition = [Block]
 
-type G st = STArray st Vertex (Either Vertex (IS.IntSet, IS.IntSet))
+type G st = STArray st Vertex (Either Vertex (FiniteMap Rank IS.IntSet, IS.IntSet))
 
-mkG :: Graph -> ST st (G st)
-mkG g = newListArray (bounds g) [Right (IS.fromList parents, IS.single v)
-                                 | (v, parents) <- assocs (transposeG g)]
+mkG :: Graph -> Table Attr -> ST st (G st)
+mkG g table =
+    newListArray (bounds g) [Right (f parents, IS.single v)
+                             | (v, parents) <- assocs (transposeG g)]
+    where f xs = addListToFM_C IS.union emptyFM
+                 [(rank, IS.single x) | x <- xs, let (_,rank) = table!x]
 
-getNodeInfo :: G st -> Vertex -> ST st (Vertex, IS.IntSet, IS.IntSet)
+{-
+mkG :: Graph -> [(Rank,IS.IntSet)] -> ST st (G st)
+mkG g foo =
+    newListArray (bounds g) [Right (f parents, IS.single v)
+                             | (v, parents) <- assocs (transposeG g)]
+    where f xs = listToFM $ cla foo (IS.fromList xs)
+
+cla :: [(Rank, IS.IntSet)] -> IS.IntSet -> [(Rank, IS.IntSet)]
+cla table xs = f table xs
+    where f [] _ = []
+          f ((rank,b):ts) xs
+              | IS.isEmpty xs = []
+              | IS.isEmpty i  = f ts xs'
+              | otherwise     = (rank,i) : (f ts xs')
+              where i   = xs `IS.intersection` b
+                    xs' = xs `IS.difference` i
+-}
+
+getNodeInfo :: G st -> Vertex -> ST st (Vertex, FiniteMap Rank IS.IntSet, IS.IntSet)
 getNodeInfo g x =
     do y <- readArray g x
        case y of
           Right (parents,vs) -> return (x,parents,vs)
           Left y1 -> getNodeInfo g y1
 
-getParents :: G st -> Vertex -> ST st IS.IntSet
+getParents :: G st -> Vertex -> ST st (FiniteMap Rank IS.IntSet)
 getParents g v =
     do (_,parents,_) <- getNodeInfo g v
        return parents
@@ -548,7 +571,7 @@ collapse g a' b' =
        (b,pbs,bs) <- getNodeInfo g b'
        if a==b
           then return a
-          else do writeArray g a $ Right ( pas `IS.union` pbs
+          else do writeArray g a $ Right ( plusFM_C IS.union pas pbs
                                          , as  `IS.union` bs
                                          )
                   let redirect = Left a
@@ -564,20 +587,14 @@ collapseBlock g b = collapseList g (IS.toList b)
 
 -----------------------------------------------------------------------------
 
-refine :: G st -> [(Rank, (STRef st Partition, Block))] ->
-          Rank -> Vertex -> ST st ()
-refine g p rank v =
+refine :: G st -> [(Rank, (STRef st Partition, Block))] -> Vertex -> ST st ()
+refine g p v =
     do parents <- getParents g v
-       unless (IS.isEmpty parents) (foldM phi parents p >> return ())
-    where phi xs (i,(ref,bi))
-              | i <= rank = return xs
-              | splitterSize == 0 ||
-                splitterSize == IS.size bi
-                  = return xs
-              | otherwise = do modifySTRef ref (split splitter)
-                               return (xs `IS.difference` splitter)
-              where splitter = xs `IS.intersection` bi
-                    splitterSize = IS.size splitter
+       unless (isEmptyFM parents) $
+           flip mapM_ p $ \(rank, (ref,bi)) ->
+                case lookupFM parents rank of
+                Just xs -> modifySTRef ref (split xs)
+                Nothing -> return ()
 
 split :: IS.IntSet -> Partition -> Partition
 split splitter xs = foldr phi [] xs
@@ -611,12 +628,18 @@ minimize' (graph, tagging) =
            b = addListToFM_C IS.union emptyFM
                [(rank, IS.single x) | (x,(_,rank)) <- assocs table]
            table = attrTable graph
+           {-
+           b = addListToFM_C IS.union emptyFM
+               [(rank,scc) | (scc,_,rank) <- info]
+           (table,info) = attrTable' graph
+           -}
        p' <- flip mapM (fmToList b) $ \(rank,block) ->
              do ref <- newSTRef [block]
                 return (rank,(ref,block))
        let p = listToFM p'
 
-       g <- mkG graph
+       g <- mkG graph table
+       --g <- mkG graph (fmToList b)
 
        case lookupFM p (Rank 0) of
            Just (ref,b0) -> writeSTRef ref (eltsFM fm)
@@ -627,27 +650,30 @@ minimize' (graph, tagging) =
 
        case lookupFM b RankNegInf of
            Just block -> do x <- collapseBlock g block
-                            refine g p' RankNegInf x
+                            refine g (tail p') x
            Nothing -> return ()
 
        -- fmToList の結果がソートされてることを前提としている
-       flip mapM_ (fmToList (delFromFM p RankNegInf)) $
-            \(rank, (ref,bi)) ->
-                  do blocks <- readSTRef ref
-                     blocks <- stabilize g bi blocks
-                     flip mapM_ blocks $
-                          \block -> do x <- collapseBlock g block
-                                       refine g p' rank x
+       let loop [] = return ()
+           loop ((rank,(ref,bi)) : ps) =
+               do blocks <- readSTRef ref
+                  blocks <- stabilize g rank bi blocks
+                  flip mapM_ blocks $
+                           \block -> do x <- collapseBlock g block
+                                        refine g ps x
+                  loop ps
+       loop (fmToList (delFromFM p RankNegInf))
+
        return g
 
-stabilize :: G st -> Block -> Partition -> ST st Partition
-stabilize g b blocks =
+stabilize :: G st -> Rank -> Block -> Partition -> ST st Partition
+stabilize g rank b blocks =
     do let b'  = IS.toAscList b
            min = head b'
            max = last b'
        tmp <- flip mapM b' $ \x ->
                    do parents <- getParents g x
-                      return (x, parents `IS.intersection` b)
+                      return (x, lookupWithDefaultFM parents IS.empty rank)
        let table :: Array Vertex (IS.IntSet)
            table = array (min, max) tmp
            ys = stabilize' (IS.size b) table blocks
