@@ -55,11 +55,6 @@ classify f = foldl phi []
                        | otherwise    = s : phi ss x
           phi [] x = [[x]]
 
-
-{-# INLINE fsPick #-}
-fsPick :: (Ord a) => FS.Set a -> a
-fsPick x = head (FS.setToList x)
-
 {-# INLINE fsIsSingleton #-}
 fsIsSingleton :: (Ord a) => FS.Set a -> Bool
 fsIsSingleton x = FS.cardinality x == 1
@@ -72,7 +67,7 @@ fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> (Bool, FS.Set a, FS.Set a)
 fsSplit x splitter = seq x $ seq splitter $
       if isize == 0
       then (False, undefined, undefined)
-      else if (isize == FS.cardinality x)
+      else if isize == FS.cardinality x
            then (False, undefined, undefined)
            else (True, i, x `FS.minusSet` i)
     where i = x `FS.intersect` splitter
@@ -116,10 +111,10 @@ elementOf (Left x) (Set sys v) =
     any (\y -> lookupFM t y == Just x) (g!v)
     where t = sysTagging sys
           g = sysGraph sys
-elementOf (Right s1) (Set sys2 v2) | isEmptySet s1 =
+elementOf (Right s1) (Set sys v) | isEmptySet s1 =
     any (\y -> null (g!y) && lookupFM t y == Nothing) (g!v)
     where t = sysTagging sys
-          g = sysGraph sys    
+          g = sysGraph sys
 elementOf (Right (Set sys1 v1)) (Set sys2 v2) =
     (in1 ! v1) `elem` (g ! (in2 ! v2))
     where (sys,in1,in2) = sumSystem sys1 sys2
@@ -433,14 +428,14 @@ collapseList g (x:xs) = foldM (collapse g) x xs
 
 -----------------------------------------------------------------------------
 
-type Partition = FS.Set Vertex
-type P st = FiniteMap Rank (STRef st [Partition])
+type Block = FS.Set Vertex
+type P st = FiniteMap Rank (STRef st [Block])
 
-refine :: G st -> [(Rank, STRef st [Partition])] -> Rank -> Vertex -> ST st ()
+refine :: G st -> [(Rank, STRef st [Block])] -> Rank -> Vertex -> ST st ()
 refine g p rank v =
     do (_,parents,_) <- apply' g v
        mapM_ (phi parents) p
-    where -- phi :: FS.Set Vertex -> (Rank, STRef st [Partition]) -> ST st ()
+    where -- phi :: FS.Set Vertex -> (Rank, STRef st [Block]) -> ST st ()
           phi parents (i,ref)
               | i <= rank = return ()
               | otherwise = modifySTRef ref (foldr phi [])
@@ -475,7 +470,7 @@ minimize tg@(g,t) = ((g',t'), m)
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
 minimize' (graph, tagging) =
     do g <- mkG graph
-       let b :: FiniteMap Rank Partition
+       let b :: FiniteMap Rank Block
            b = addListToFM_C (\old new -> new `FS.union` old) emptyFM
                              [(rank, FS.unitSet x)
                               | (x,(_,rank)) <- assocs (attrTable graph)]
@@ -501,43 +496,39 @@ minimize' (graph, tagging) =
        mapM_ loop (fmToList (delFromFM p RankNegInf))
        return g
 
-divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
+divideRank0 :: (Ord u) => Tagging u -> [Block] -> [Block]
 divideRank0 tagging ps = eltsFM fm
     where fm = addListToFM_C (\old new -> new `FS.union` old) emptyFM
                              [(lookupFM tagging x, FS.unitSet x)
                               | x <- concatMap FS.setToList ps]
 
--- XXX
-stabilize :: G st -> Partition -> [Partition] -> ST st [Partition]
+stabilize :: G st -> Block -> [Block] -> ST st [Block]
 stabilize g b xs =
     do let b' = FS.setToList b
        tmp <- mapM (\x ->
-                    do (_,preds,_) <- apply' g x
-                       return (x, preds `FS.intersect` b)) b'
-       let preds :: Array Vertex (FS.Set Vertex)
-           preds = array (head b', last b') tmp
+                    do (_,parents,_) <- apply' g x
+                       return (x, parents `FS.intersect` b)) b'
+       let table :: Array Vertex (FS.Set Vertex)
+           table = array (head b', last b') tmp
                    -- setToList の結果はソートされているので、
-                   -- headとlastで最小元と最大元が得られる
-           (ss,ps) = partition fsIsSingleton xs
-           ys  = loop preds ss ps xs
+                   -- headとlastで最小元と最大元が得られる           
+           ys  = f table xs
        return ys
-    where loop :: Array Vertex (FS.Set Vertex)
-               -> [Partition]
-               -> [Partition]
-               -> [Partition]
-               -> [Partition]
-          loop preds ss [] qs     = ss
-          loop preds ss ps []     = ss ++ ps
-          loop preds ss ps (q:qs) =
-              case foldl phi (ss,[],qs) ps of
-              (ss',ps',qs') -> loop preds ss' ps' qs'
-              where splitter = FS.unionManySets (map (preds!) (FS.setToList q))
-                    phi (ss,ps,qs) p
-                        | fsIsSingleton p = (p:ss, ps, qs)
-                        | otherwise =
-                            case fsSplit p splitter of
-                            (True,a,b) -> (ss, a:b:ps, a:b:qs)
-                            _          -> (ss, p:ps, qs)
+    where f :: Array Vertex (FS.Set Vertex) -> [Block] -> [Block]
+          f table xs = loop [] xs xs
+              where loop :: [Block] -> [Block] -> [Block] -> [Block]
+                    loop ss [] qs     = ss
+                    loop ss ps []     = ss ++ ps
+                    loop ss ps (q:qs) = case foldl phi (ss,[],qs) ps of
+					(ss',ps',qs') -> loop ss' ps' qs'
+                        where splitter = FS.unionManySets
+                                           (map (table!) (FS.setToList q))
+                              phi (ss,ps,qs) p
+                                  | fsIsSingleton p = (p:ss, ps, qs)
+                                  | otherwise =
+                                      case fsSplit p splitter of
+                                      (True,a,b) -> (ss, a:b:ps, a:b:qs)
+                                      _          -> (ss, p:ps, qs)
 
 -----------------------------------------------------------------------------
 
