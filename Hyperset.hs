@@ -55,6 +55,19 @@ classify f = foldl phi []
                        | otherwise    = s : phi ss x
           phi [] x = [[x]]
 
+
+{-# INLINE fsIsSingleton #-}
+fsIsSingleton :: (Ord a) => FS.Set a -> Bool
+fsIsSingleton x = FS.cardinality x == 1
+
+{-# INLINE fsSplit #-}
+fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> (FS.Set a, FS.Set a)
+fsSplit x splitter = seq x $ seq splitter $
+      if FS.isEmptySet i
+      then (i, x)
+      else (i, x `FS.minusSet` i)
+    where i = x `FS.intersect` splitter
+
 showSet :: (Show u, Ord u) => Set u -> String
 showSet s | isWellfounded s = f s
           | otherwise = "non-wellfounded set"
@@ -387,7 +400,7 @@ collapseList g (x:xs) = foldM (collapse g) x xs
 
 -----------------------------------------------------------------------------
 
-type Partition = [Vertex]
+type Partition = FS.Set Vertex
 type P st = FiniteMap Rank (STRef st [Partition])
 
 -- この関数がボトルネックになってる
@@ -400,8 +413,10 @@ refine g p rank v =
           phi vs (i,ref)
               | i <= rank = return ()
               | otherwise = modifySTRef ref (concatMap f)
-              where f p = [x | x <- [pa,pb], not (null x)]
-                        where (pa,pb) = partition (`FS.elementOf` vs) p
+              where f p | fsIsSingleton p = [p]
+                        | otherwise =
+                             [x | x <- [a,b], not (FS.isEmptySet x)]
+                        where (a,b) = fsSplit p vs
 
 -----------------------------------------------------------------------------
 
@@ -425,16 +440,16 @@ minimize tg@(g,t) = {-trace (seq g $ seq m $ show (g,m)) $ -} ((g',t'), m)
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
 minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
     do g <- mkGFromGraph graph
-       let b :: FiniteMap Rank [Vertex]
-           b = addListToFM_C (\old new -> new++old) emptyFM
-                             [(rank,[x])
+       let b :: FiniteMap Rank Partition
+           b = addListToFM_C (\old new -> new `FS.union` old) emptyFM
+                             [(rank, FS.unitSet x)
                               | (x,(_,rank)) <- assocs (attrTable graph)]
        p' <- mapM (\(rank,vs) -> do ref <- newSTRef [vs]; return (rank,ref))
                   (fmToList b)
        let -- p :: P st
            p = listToFM p'
        case lookupFM b RankNegInf of
-           Just xs -> do x <- collapseList g xs
+           Just xs -> do x <- collapseList g (FS.setToList xs) -- XXX
                          refine g p' RankNegInf x
            Nothing -> return ()
        case lookupFM p (Rank 0) of
@@ -444,7 +459,7 @@ minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
                do di <- readSTRef ref
                   let (Just bi) = lookupFM b rank
                   di <- stabilize g bi di
-                  let f xs = do x <- collapseList g xs
+                  let f xs = do x <- collapseList g (FS.setToList xs) -- XXX
                                 refine g p' rank x
                   mapM_ f di
        -- fmToList の結果がソートされてることを前提としている
@@ -453,34 +468,39 @@ minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
 
 divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
 divideRank0 tagging ps = eltsFM fm
-    where fm = addListToFM_C (\old new -> new++old) emptyFM
-                             [(lookupFM tagging x, [x]) | x <- concat ps]
+    where fm = addListToFM_C (\old new -> new `FS.union` old) emptyFM
+                             [(lookupFM tagging x, FS.unitSet x)
+                              | x <- concatMap FS.setToList ps]
 
 -- XXX
 stabilize :: G st -> Partition -> [Partition] -> ST st [Partition]
 stabilize g b xs =
-    do let b' = FS.mkSet b
+    do let b' = FS.setToList b
        tmp <- mapM (\x ->
                     do (_,preds) <- apply' g x
-                       return (x, preds `FS.intersect` b')) b
+                       return (x, preds `FS.intersect` b)) b'
        let preds :: Array Vertex (FS.Set Vertex)
-           preds = array (minimum b, maximum b) tmp
-           xs' = map FS.mkSet xs
-           ys  = map FS.setToList (loop preds [] xs' xs')
+           preds = array (head b', last b') tmp
+                   -- setToList の結果はソートされているので、
+                   -- headとlastで最小元と最大元が得られる
+           ys  = loop preds [] xs xs
        return ys
-    where loop preds ss ps []     = ss ++ ps
+    where loop :: Array Vertex (FS.Set Vertex)
+               -> [Partition]
+               -> [Partition]
+               -> [Partition]
+               -> [Partition]
+          loop preds ss ps []     = ss ++ ps
           loop preds ss ps (q:qs) =
               case foldl phi (ss,[],qs) ps of
               (ss',ps',qs') -> loop preds ss' ps' qs'
               where splitter = FS.unionManySets (map (preds!) (FS.setToList q))
                     phi (ss,ps,qs) p
                         | not (FS.isEmptySet a) && not (FS.isEmptySet b)
-                            = case partition isSingleton [a,b] of
+                            = case partition fsIsSingleton [a,b] of
                               (ss', ps') -> (ss'++ss, ps'++ps, a:b:qs)
                         | otherwise = (ss, p : ps, qs)
-                        where a = p `FS.intersect` splitter
-                              b = p `FS.minusSet`  splitter
-                              isSingleton x = FS.cardinality x == 1
+                        where (a,b) = fsSplit p splitter
 
 -----------------------------------------------------------------------------
 
