@@ -14,10 +14,11 @@ module Hyperset
     , union
     , intersection
     , difference
+    , equivClass
     , separate
     , mapSet
 
-    , elementOf
+    , member
     , subsetOf
     , supersetOf
     , properSubsetOf
@@ -38,44 +39,6 @@ import Data.STRef
 import Control.Monad
 import Control.Monad.ST.Strict
 import Debug.Trace
-
------------------------------------------------------------------------------
-
--- XXX:
-instance (Ord k, Show k, Show e) => Show (FiniteMap k e) where
-    showsPrec d fm = showsPrec d (fmToList fm)
-
-powerList :: [a] -> [[a]]
-powerList = foldr phi [[]]
-    where phi a xs = map (a:) xs ++ xs
-
-classify :: (a -> a -> Bool) -> [a] -> [[a]]
-classify f = foldl phi []
-    where phi (s:ss) x | f (head s) x = (x:s) : ss
-                       | otherwise    = s : phi ss x
-          phi [] x = [[x]]
-
-{-# INLINE fsIsSingleton #-}
-fsIsSingleton :: (Ord a) => FS.Set a -> Bool
-fsIsSingleton x = FS.cardinality x == 1
-
-{-# INLINE fsSplit #-}
-fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> Maybe (FS.Set a, FS.Set a)
-fsSplit x splitter = seq x $ seq splitter $
-      if isize == 0
-      then Nothing
-      else if isize == FS.cardinality x
-           then Nothing
-           else Just (i, x `FS.minusSet` i)
-    where i = x `FS.intersect` splitter
-          isize = FS.cardinality i
-
-showSet :: (Show u, Ord u) => Set u -> String
-showSet s | isWellfounded s = f s
-          | otherwise = "non-wellfounded set"
-    where f s = "{" ++ concat (intersperse "," (map g (toList s))) ++ "}"
-          g (Left u)   = show u
-          g (Right s') = f s'
 
 -----------------------------------------------------------------------------
 
@@ -103,16 +66,16 @@ isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
 
 -- 汚いなぁ
-elementOf :: Ord u => (Either u (Set u)) -> Set u -> Bool
-elementOf (Left x) (Set sys v) =
+member :: Ord u => (Either u (Set u)) -> Set u -> Bool
+member (Left x) (Set sys v) =
     any (\y -> lookupFM t y == Just x) (g!v)
     where t = sysTagging sys
           g = sysGraph sys
-elementOf (Right s1) (Set sys v) | isEmptySet s1 =
+member (Right s1) (Set sys v) | isEmptySet s1 =
     any (\y -> null (g!y) && lookupFM t y == Nothing) (g!v)
     where t = sysTagging sys
           g = sysGraph sys
-elementOf (Right (Set sys1 v1)) (Set sys2 v2) =
+member (Right (Set sys1 v1)) (Set sys2 v2) =
     (in1 ! v1) `elem` (g ! (in2 ! v2))
     where (sys,in1,in2) = sumSystem sys1 sys2
           g = sysGraph sys
@@ -177,13 +140,6 @@ solve equations = array (bounds equations)
                    | i <- indices equations
                    , let Right x = wrap sys (m!i)]
     where (sys,m)  = normalize $ mkTaggedGraphFromEquations equations
-{-
-solve (array (0,0) [(0,atom)])
-=> array (0,0) [(0,Set (System (array (0,0) [(0,[0])]) []) 0)]
-
-solve (array (0,1) [(0, fromList [Left (Right 1)]), (1, fromList [Left (Right 0)])])
-=> array (0,1) [(0,Set (System (array (0,0) [(0,[0])]) []) 0),(1,Set (System (array (0,0) [(0,[0])]) []) 0)]
--}
 
 -- XXX: 汚いなぁ
 mkTaggedGraphFromEquations
@@ -229,6 +185,10 @@ powerset s@(Set sys v) = constructSet (g',t) v'
           p  = zip [(ub+1)..] (powerList (g!v))
           g' = array (lb, v') ((v', map fst p) : p ++ assocs g)
 
+powerList :: [a] -> [[a]]
+powerList = foldr phi [[]]
+    where phi a xs = map (a:) xs ++ xs
+
 -- XXX: 汚いなぁ
 union :: Ord u => Set u -> Set u -> Set u
 union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
@@ -249,13 +209,14 @@ union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
 
 -- unionManySets :: Ord u => Set u -> Set u
 
+-- 効率が悪い
 intersection :: Ord u => Set u -> Set u -> Set u
-a `intersection` b = separate (\x -> x `elementOf` b) a
+a `intersection` b = separate (\x -> x `member` b) a
 
+-- 効率が悪い
 difference :: Ord u => Set u -> Set u -> Set u
-a `difference` b = separate (\x -> not (x `elementOf` b)) a
+a `difference` b = separate (\x -> not (x `member` b)) a
 
--- equivClass (\(Left n) (Left m) -> n `mod` 3 == m `mod` 3) (fromList [Left 1, Left 2, Left 3, Left 4])
 equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
                        (Set u -> Set u)
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
@@ -265,6 +226,12 @@ equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
           (lb,ub) = bounds (sysGraph sys)
           v' = ub + length l + 1
           g' = array (lb, v') ((v', map fst l) : l ++ assocs g)
+
+classify :: (a -> a -> Bool) -> [a] -> [[a]]
+classify f = foldl phi []
+    where phi (s:ss) x | f (head s) x = (x:s) : ss
+                       | otherwise    = s : phi ss x
+          phi [] x = [[x]]
 
 -- filter という名前の方がよい?
 separate :: Ord u => (Either u (Set u) -> Bool) -> (Set u -> Set u)
@@ -528,10 +495,34 @@ stabilize g b xs =
                                       Nothing    -> (ss, p:ps, qs)
 
 -----------------------------------------------------------------------------
+-- utility
 
-{-
-http://citeseer.ist.psu.edu/cache/papers/cs/29860/http:zSzzSzwww.dimi.uniud.itzSz~piazzazSzPAPERSzSzcav01.pdf/dovier00fast.pdf
+-- XXX:
+instance (Ord k, Show k, Show e) => Show (FiniteMap k e) where
+    showsPrec d fm = showsPrec d (fmToList fm)
 
-R. Paige and R. E. Tarjan. Three partition refinement algorithms. SIAM Journal on Computing, 16(6):973-989, 1987.
-を探さなくては
--}
+-- XXX:
+showSet :: (Show u, Ord u) => Set u -> String
+showSet s | isWellfounded s = f s
+          | otherwise = "non-wellfounded set"
+    where f s = "{" ++ concat (intersperse "," (map g (toList s))) ++ "}"
+          g (Left u)   = show u
+          g (Right s') = f s'
+
+{-# INLINE fsIsSingleton #-}
+fsIsSingleton :: (Ord a) => FS.Set a -> Bool
+fsIsSingleton x = FS.cardinality x == 1
+
+{-# INLINE fsSplit #-}
+fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> Maybe (FS.Set a, FS.Set a)
+fsSplit x splitter = seq x $ seq splitter $
+      if isize == 0
+      then Nothing
+      else if isize == FS.cardinality x
+           then Nothing
+           else Just (i, x `FS.minusSet` i)
+    where i = x `FS.intersect` splitter
+          isize = FS.cardinality i
+
+-----------------------------------------------------------------------------
+
