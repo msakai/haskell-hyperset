@@ -87,7 +87,7 @@ s1 \\ s2 = s1 `difference` s2
 --------------------------------------------------------------------}
 
 -- |Set with extra urelements from @u@.
-data Ord u => Set u = Set !(System u) !Vertex deriving Show
+data Ord u => Set u = Set !(System u) !Vertex
 
 -- |Extra urelemnt or set.
 type UrelemOrSet u = Either u (Set u)
@@ -99,6 +99,10 @@ instance Ord u => Eq (Set u) where
         cardinality s1 == cardinality s2 &&
         in1!v1 == in2!v2
         where (_,in1,in2) = mergeSystem sys1 sys2
+
+instance (Ord u, Show u) => Show (Set u) where
+    showsPrec d s = showsPrec d (g, v, fmToList t)
+       where (g,v,t) = picture s
 
 {--------------------------------------------------------------------
   Query
@@ -397,6 +401,7 @@ data System u =
     }
 
 -- for debuging
+{-
 instance (Ord u, Show u) => (Show (System u)) where
     showsPrec d System{ sysGraph = g, sysTagging = t, sysAttrTable = attr}
         | d == 11   = ('(':) . f . (')':)
@@ -404,6 +409,7 @@ instance (Ord u, Show u) => (Show (System u)) where
         where f = ("System "++) . (showsPrec 11 g) . (' ':)
                   . (showsPrec 11 (fmToList t)) . (' ':)
                   . (showsPrec 11 attr)
+-}
 
 mkSystem :: Ord u => TaggedGraph u -> (System u, Table Vertex)
 mkSystem (g,t) = (sys, m)
@@ -620,14 +626,6 @@ stabilize g b xs =
 {--------------------------------------------------------------------
   Utility functions
 --------------------------------------------------------------------}
-
--- XXX:
-showSet :: (Show u, Ord u) => Set u -> String
-showSet s | isWellfounded s = f s
-          | otherwise = "non-wellfounded set"
-    where f s = "{" ++ concat (intersperse "," (map g (toList s))) ++ "}"
-          g (Left u)   = show u
-          g (Right s') = f s'
 
 {-# INLINE fsIsSingleton #-}
 fsIsSingleton :: (Ord a) => FS.Set a -> Bool
