@@ -16,8 +16,8 @@ instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
            t <- genTagging g
            let d = decorate g t
                f [] = arbitrary
-               f (Left _ : xs)  = f xs
-               f (Right x : xs) = return x
+               f (Urelem _ : xs)  = f xs
+               f (SetElem x : xs) = return x
            f (elems d)
     coarbitrary set =
         variant v . coarbitrary (fmToList t) . coarbitrary (assocs g)
@@ -118,13 +118,13 @@ prop_powersetSize x =
 prop_powerset1 :: Set Int -> Property
 prop_powerset1 x =
     (cardinality x) <= 8 ==> all f (toList (powerset x))
-    where f (Left _)  = False
-          f (Right z) = z `subset` x
+    where f (Urelem _)  = False
+          f (SetElem z) = z `subset` x
 
 prop_powerset2 :: Set Int -> Property
 prop_powerset2 x =
    (cardinality x) <= 8 ==>
-        (Right x) `member` px && (Right empty) `member` px
+        (SetElem x) `member` px && (SetElem empty) `member` px
     where px = powerset x
 
 -----------------------------------------------------------------------------

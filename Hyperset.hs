@@ -16,7 +16,7 @@ module Hyperset
     (
     -- * The @Set@ type
       Set
-    , UrelemOrSet
+    , Elem (..)
 
     -- * Operators
     , (\\)
@@ -33,7 +33,7 @@ module Hyperset
     , properSuperset
 
     -- * Construction
-    , atom
+    , quineAtom
     , empty
     , singleton
     , powerset
@@ -91,7 +91,11 @@ s1 \\ s2 = s1 `difference` s2
 data Ord u => Set u = Set !(System u) !Vertex
 
 -- |Urelemnt or set.
-type UrelemOrSet u = Either u (Set u)
+data Ord u => Elem u
+    = SetElem (Set u)
+    | Urelem u
+
+--type UrelemOrSet u = Either u (Set u)
 
 instance Ord u => Eq (Set u) where
     s1 == s2 | isEmpty s1 && isEmpty s2 = True
@@ -130,16 +134,16 @@ isSingleton x = cardinality x == 1
 
 -- XXX: 汚いなぁ
 -- |Is the element in the set?
-member :: Ord u => (UrelemOrSet u) -> Set u -> Bool
-member (Left x) (Set sys v) =
+member :: Ord u => Elem u -> Set u -> Bool
+member (Urelem x) (Set sys v) =
     any (\y -> lookupFM t y == Just x) (g!v)
     where t = sysTagging sys
           g = sysGraph sys
-member (Right s1) (Set sys v) | isEmpty s1 =
+member (SetElem s1) (Set sys v) | isEmpty s1 =
     any (\y -> null (g!y) && lookupFM t y == Nothing) (g!v)
     where t = sysTagging sys
           g = sysGraph sys
-member (Right (Set sys1 v1)) (Set sys2 v2) =
+member (SetElem (Set sys1 v1)) (Set sys2 v2) =
     (in1 ! v1) `elem` (g ! (in2 ! v2))
     where (sys,in1,in2) = mergeSystem sys1 sys2
           g = sysGraph sys
@@ -178,16 +182,16 @@ as `properSuperset` bs = bs `properSubset` as
   Construction
 --------------------------------------------------------------------}
 
--- |Quine's atom: Ω={Ω}.
-atom :: Ord u => Set u
-atom = constructSet (listArray (0,0) [[0]], emptyFM) 0
+-- |Quine atom: x={x}.
+quineAtom :: Ord u => Set u
+quineAtom = constructSet (listArray (0,0) [[0]], emptyFM) 0
 
 -- |The empty set.
 empty :: Ord u => Set u
 empty = fromList []
 
 -- |Create a singleton set.
-singleton :: Ord u => UrelemOrSet u -> Set u
+singleton :: Ord u => Elem u -> Set u
 singleton u = fromList [u]
 
 -- XXX: 汚いなぁ
@@ -241,10 +245,9 @@ difference :: Ord u => Set u -> Set u -> Set u
 a `difference` b = separate (\x -> not (x `member` b)) a
 
 -- |The quotient set by the equivalent relation.
-equivClass :: Ord u => (UrelemOrSet u -> UrelemOrSet u -> Bool) ->
-                       (Set u -> Set u)
+equivClass :: Ord u => (Elem u -> Elem u -> Bool) -> (Set u -> Set u)
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
-    where f' a b = f (toUrelemOrSet sys a) (toUrelemOrSet sys b)
+    where f' a b = f (toElem sys a) (toElem sys b)
           g = sysGraph sys
           l = zip [ub+1..] (classifyList f' (g ! v))
           (lb,ub) = bounds (sysGraph sys)
@@ -258,29 +261,28 @@ classifyList f = foldl phi []
           phi [] x = [[x]]
 
 -- |Filter all elements that satisfy the predicate.
-separate :: Ord u => (UrelemOrSet u -> Bool) -> (Set u -> Set u)
+separate :: Ord u => (Elem u -> Bool) -> (Set u -> Set u)
 separate f (Set sys v) =
     constructSet (g',t) v'
     where g = sysGraph sys
           t = sysTagging sys
           (lb,ub) = bounds g
           g'  = array (lb,ub+1) (foo : assocs g)
-              where foo = (v', [child | child <- g!v, f (toUrelemOrSet sys child)])
+              where foo = (v', [child | child <- g!v, f (toElem sys child)])
           v'  = ub+1
 
--- partition :: Ord u => (UrelemOrSet u -> Bool) -> Set u -> (Set u, Set u)
+-- partition :: Ord u => (Elem u -> Bool) -> Set u -> (Set u, Set u)
 
 {-
-mapSet :: (Ord u, Ord u') =>
-          (UrelemOrSet u -> UrelemOrSet u') -> (Set u -> Set u')
+mapSet :: (Ord u, Ord u') => (Elem u -> Elem u') -> (Set u -> Set u')
 mapSet f = fromList . map f . toList
 -}
 
 
-toUrelemOrSet :: Ord u => System u -> Vertex -> UrelemOrSet u
-toUrelemOrSet sys v = case lookupFM (sysTagging sys) v of
-                      Just e  -> Left e
-                      Nothing -> Right (Set sys v)
+toElem :: Ord u => System u -> Vertex -> Elem u
+toElem sys v = case lookupFM (sysTagging sys) v of
+               Just e  -> Urelem e
+               Nothing -> SetElem (Set sys v)
 
 constructSet :: Ord u => TaggedGraph u -> Vertex -> Set u
 constructSet tg v = Set sys (m!v)
@@ -349,8 +351,8 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
 -- |Let G be an accessible graph, and let U={φ}∪@u@ be a collection
 -- containing the empty set and urelements. A tagging of G is a function
 -- t: G->U that assigns to each childless node of G an element of U.
--- And we interpret @lookupFM t n == Nothing@ for a childless node n of G 
--- as t(v)=φ.
+-- For a childless node v of G, we interpret @lookupFM t v == Just u@
+-- as t(v)=u, @lookupFM t v == Just u@ as t(v)=φ.
 type Tagging u = FiniteMap Vertex u
 
 -- |A decoration is a function d defined on each node n of G such that
@@ -359,13 +361,13 @@ type Tagging u = FiniteMap Vertex u
 --
 -- * d(n) = {d(m) | m∈children(n)}
 --
-type Decoration u = Table (UrelemOrSet u)
+type Decoration u = Table (Elem u)
 
 -- |compute the decoration.
 decorate :: (Ord u) => Graph -> Tagging u -> Decoration u
 decorate g t = d
     where (sys,m) = mkSystem (g,t)
-          d = listArray (bounds g) [toUrelemOrSet sys (m!v) | v <- indices g]
+          d = listArray (bounds g) [toElem sys (m!v) | v <- indices g]
 
 -- |Tagged apg(accessible pointed graph) that pictures the set.
 picture :: (Ord u) => Set u -> (Graph, Vertex, Tagging u)
@@ -376,16 +378,16 @@ picture (Set sys v) = (sysGraph sys, v, sysTagging sys)
 --------------------------------------------------------------------}
 
 -- |The elements of a set.
-toList :: Ord u => Set u -> [UrelemOrSet u]
-toList (Set sys v) = map (toUrelemOrSet sys) (sysGraph sys ! v)
+toList :: Ord u => Set u -> [Elem u]
+toList (Set sys v) = map (toElem sys) (sysGraph sys ! v)
 
 -- |Create a set from a list of elements.
-fromList :: Ord u => [UrelemOrSet u] -> Set u
+fromList :: Ord u => [Elem u] -> Set u
 fromList xs = constructSet (array (0,n) ((n,children):l), t) n
     where ((n,l,t), children) = mapAccumL phi (0,[],emptyFM) xs
-          phi (n,l,t) (Left u) =
+          phi (n,l,t) (Urelem u) =
               ((n+1, (n,[]):l, addToFM t n u), n)
-          phi (n,l,t) (Right (Set sys v)) =
+          phi (n,l,t) (SetElem (Set sys v)) =
               ((ub+off+1, l'++l, addListToFM t t'), v+off)
               where (lb,ub) = bounds (sysGraph sys)
                     off = n - lb
@@ -481,6 +483,12 @@ attrTable g = table
                                          `IS.difference` IS.fromList scc'
 
 -----------------------------------------------------------------------------
+
+{-
+data GAttr
+    = Redirect Vertex
+    | GAttr IS.IntSet IS.IntSet
+-}
 
 type G st = STArray st Vertex (Either Vertex (IS.IntSet, IS.IntSet))
 

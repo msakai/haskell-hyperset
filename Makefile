@@ -1,17 +1,17 @@
-bench.exe: Bench.hs Hyperset.hs
-	ghc -Wall -O -prof -auto-all --make $< -o $@
+HCFLAGS = -Wall -O -prof -auto-all
 # -ddump-simpl
 # -ddump-minimal-imports
 # -O
-
-check.exe: Check.hs Hyperset.hs
-	ghc -Wall -prof -auto-all --make $< -o $@
-
 # 例外の発生場所を知るには
 # compiling with -prof -auto-all and running with +RTS -xc
 
+all: bench.exe test.exe
+
+bench.exe: Bench.hs Hyperset.hs
+	ghc $(HCFLAGS) --make $< -o $@
+
 test.exe: Test.hs Hyperset.hs
-	ghc --make $< -o $@
+	ghc $(HCFLAGS) --make $< -o $@
 
 .PHONY: test clean doc
 
