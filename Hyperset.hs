@@ -56,6 +56,10 @@ classify f = foldl phi []
           phi [] x = [[x]]
 
 
+{-# INLINE fsPick #-}
+fsPick :: (Ord a) => FS.Set a -> a
+fsPick x = head (FS.setToList x)
+
 {-# INLINE fsIsSingleton #-}
 fsIsSingleton :: (Ord a) => FS.Set a -> Bool
 fsIsSingleton x = FS.cardinality x == 1
@@ -364,34 +368,35 @@ rankTableTest2 = a==b
 
 -----------------------------------------------------------------------------
 
-type G st = STArray st Vertex (Either Vertex (FS.Set Vertex))
+type G st = STArray st Vertex (Either Vertex (FS.Set Vertex, FS.Set Vertex))
 
 mkG :: Graph -> ST st (G st)
 mkG g =
-    newListArray (bounds g) [Right (FS.mkSet e) | e <- elems (transposeG g)]
+    newListArray (bounds g) [Right (FS.mkSet parents, FS.unitSet v)
+                             | (v, parents) <- assocs (transposeG g)]
 
 apply :: G st -> Vertex -> ST st Vertex
-apply g x = do (x',_) <- apply' g x
+apply g x = do (x',_,_) <- apply' g x
                return x'
 
-apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex)
+apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex, FS.Set Vertex)
 apply' g x =
     do y' <- readArray g x
        case y' of
-          Right parents -> return (x,parents)
+          Right (parents,vs) -> return (x,parents,vs)
           Left y ->
-              do (z, parents) <- apply' g y
+              do (z, parents, vs) <- apply' g y
                  unless (y==z) (writeArray g x (Left z)) -- 経路圧縮
-                 return (z, parents)
+                 return (z, parents, vs)
 
 collapse :: G st -> Vertex -> Vertex -> ST st Vertex
 collapse g a' b' =
-    do (a,as) <- apply' g a'
-       (b,bs) <- apply' g b'
+    do (a,pa,as) <- apply' g a'
+       (b,pb,bs) <- apply' g b'
        if a==b
           then return a
           else do writeArray g a' (Left b')
-                  writeArray g b' (Right (as `FS.union` bs))
+                  writeArray g b' (Right (pa `FS.union` pb, as `FS.union` bs))
                   return b'
 
 collapseList :: G st -> [Vertex] -> ST st Vertex
@@ -405,37 +410,38 @@ type P st = FiniteMap Rank (STRef st [Partition])
 
 refine :: G st -> [(Rank, STRef st [Partition])] -> Rank -> Vertex -> ST st ()
 refine g p rank v =
-    do (_,vs) <- apply' g v
-       mapM_ (phi vs) p
+    do (_,parents,_) <- apply' g v
+       mapM_ (phi parents) p
     where -- phi :: FS.Set Vertex -> (Rank, STRef st [Partition]) -> ST st ()
-          phi vs (i,ref)
+          phi parents (i,ref)
               | i <= rank = return ()
               | otherwise = modifySTRef ref (foldr phi [])
               where phi p ps
                         | fsIsSingleton p = p : ps
                         | otherwise =
-                            case fsSplit p vs of
+                            case fsSplit p parents of
                             (True,a,b) -> a : b : ps
                             _          -> p : ps
 
 -----------------------------------------------------------------------------
 
--- 汚いなぁ
 minimize :: (Ord u) => TaggedGraph u -> (TaggedGraph u, Table Vertex)
 minimize tg@(g,t) = ((g',t'), m)
-    where g' = array (0, sizeFM fm - 1)
-                 [(i, sort $ nub $ map (m!) (g!x)) | (i,x:_) <- c]
-          t' = listToFM [(m!v,u) | (v,u) <- fmToList t]
-          m = array (bounds g) [(x,i) | (i,xs) <- c, x <- xs]
-          c :: [(Vertex,[Vertex])]
-          c = zip [0..] (eltsFM fm)
-          fm :: FiniteMap Vertex [Vertex]
-          fm = addListToFM_C (\old new -> new++old) emptyFM
-                 [(v',[v]) | (v,v') <- m1]
-          m1 :: [(Vertex,Vertex)]
-          m1 = runST (do gg <- minimize' tg
-                         mapM (\v -> do v' <- apply gg v; return (v,v'))
-                              (indices g))
+    where t' = listToFM [(m!v,u) | (v,u) <- fmToList t]
+          (m,g') = case foldl phi (0,[],[]) hoge of
+                        (size, xs, ys) ->
+                            ( array (bounds g) xs
+                            , array (0, size - 1) ys
+                            )
+             where phi (n,xs,ys) (v, Left _)       = (n, xs, ys)
+                   phi (n,xs,ys) (v, Right (_,vs)) =
+                       ( n+1
+                       , [(x,n) | x <- FS.setToList vs] ++ xs
+                       , (n, sort $ nub $ map (m!) (g!v)) : ys
+                       )
+                   hoge = runST (do gg <- minimize' tg
+                                    assocs <- getAssocs gg
+                                    return assocs)
 
 -- あんましFiniteMap使う必然性はないんだよなぁ
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
@@ -478,7 +484,7 @@ stabilize :: G st -> Partition -> [Partition] -> ST st [Partition]
 stabilize g b xs =
     do let b' = FS.setToList b
        tmp <- mapM (\x ->
-                    do (_,preds) <- apply' g x
+                    do (_,preds,_) <- apply' g x
                        return (x, preds `FS.intersect` b)) b'
        let preds :: Array Vertex (FS.Set Vertex)
            preds = array (head b', last b') tmp
