@@ -46,7 +46,7 @@ data Ord u => Set u = Set !(System u) !Vertex deriving Show
 
 instance Ord u => Eq (Set u) where
     s1@(Set sys1 v1) == s2@(Set sys2 v2) =
-        sysAttrTable sys1 ! v1 == sysAttrTable sys1 ! v2 &&
+        sysAttrTable sys1 ! v1 == sysAttrTable sys2 ! v2 &&
         cardinality s1 == cardinality s2 &&
         in1!v1 == in2!v2
         where (sys,in1,in2) = sumSystem sys1 sys2
