@@ -42,11 +42,11 @@ import Debug.QuickCheck
 
 -----------------------------------------------------------------------------
 
--- |A set. 
+-- |Set with urelements from {φ}∪u. 
 data Ord u => Set u = Set !(System u) !Vertex deriving Show
 
 -- Set u のsupertypeとして定義できたらいいのになぁ。
--- |FIXME
+-- |Urelemnt (except φ) or set.
 type UrelemOrSet u = Either u (Set u)
 
 -- |Variable in system of equation.
@@ -55,7 +55,7 @@ type Var = Int
 -- |System of equations.
 type SystemOfEquations u = Array Var (Set (Either u Var))
 
--- |Solutions of system of equation.
+-- |Solution of system of equation.
 type Solution u = Array Var (Set u)
 
 instance Ord u => Eq (Set u) where
