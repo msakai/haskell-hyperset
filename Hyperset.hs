@@ -424,8 +424,8 @@ refine g p rank v =
                   = return xs
               | otherwise = do modifySTRef ref (foldr phi [])
                                return (xs `FS.minusSet` splitter)
-              where splitter = xs `FS.intersect` bi
-		    splitterCardinality = FS.cardinality splitter
+              where splitter = xs `FS.intersect` bi                 
+                    splitterCardinality = FS.cardinality splitter
                     phi p ps
                         | fsIsSingleton p = p : ps
                         | otherwise =
@@ -497,25 +497,32 @@ stabilize g b xs =
            table = array (head b', last b') tmp
                    -- setToList の結果はソートされているので、
                    -- headとlastで最小元と最大元が得られる
-           ys  = f table xs
+           ys  = f table (FS.cardinality b) xs
        return ys
-    where f :: Array Vertex (FS.Set Vertex) -> [Block] -> [Block]
-          f table xs = loop [] xs xs
+    where f :: Array Vertex (FS.Set Vertex) -> Int -> [Block] -> [Block]
+          f table bsize xs = loop [] xs xs
               where loop :: [Block] -> [Block] -> [Block] -> [Block]
                     loop ss [] _  = ss
                     loop ss ps [] = ss ++ ps
                     loop ss ps (q:qs)
-                        | FS.isEmptySet splitter = loop ss ps qs
+                        | splitterCardinality == 0 ||
+                          splitterCardinality == bsize
+                            = loop ss ps qs
                         | otherwise =
                             case foldl phi (ss,[],qs) ps of
                             (ss',ps',qs') -> loop ss' ps' qs'
                         where splitter = FS.unionManySets
                                            (map (table!) (FS.setToList q))
+                              splitterCardinality = FS.cardinality splitter
                               phi (ss,ps,qs) p
                                   | fsIsSingleton p = (p:ss, ps, qs)
                                   | otherwise =
                                       case fsSplit p splitter of
-                                      Just (a,b) -> (ss, a:b:ps, a:b:qs)
+                                      Just (a,b) ->
+                                          ( ss
+                                          , a:b:ps
+                                          , [x | x <- [a,b], x/=splitter] ++ qs
+                                          )
                                       Nothing    -> (ss, p:ps, qs)
 
 -----------------------------------------------------------------------------
@@ -545,8 +552,6 @@ fsSplit x splitter = seq x $ seq splitter $
           isize = FS.cardinality i
 
 nubAndSort :: (Ord a) => [a] -> [a]
--- nubAndSort = nub . sort
 nubAndSort = FS.setToList . FS.mkSet
 
 -----------------------------------------------------------------------------
-
