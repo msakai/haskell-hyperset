@@ -36,9 +36,10 @@ import Data.FiniteMap
 import qualified Data.Set as FS
 import Data.List hiding (union)
 import Data.STRef
-import Control.Monad
-import Control.Monad.ST.Strict
-import Debug.Trace
+import Control.Monad (unless, foldM, mapM_, mapM)
+import Control.Monad.ST (runST, ST)
+--import Debug.Trace
+import Debug.QuickCheck
 
 -----------------------------------------------------------------------------
 
@@ -49,7 +50,14 @@ instance Ord u => Eq (Set u) where
         sysAttrTable sys1 ! v1 == sysAttrTable sys2 ! v2 &&
         cardinality s1 == cardinality s2 &&
         in1!v1 == in2!v2
-        where (sys,in1,in2) = sumSystem sys1 sys2
+        where (_,in1,in2) = sumSystem sys1 sys2
+
+instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
+    arbitrary = do sys <- arbitrary
+                   v <- choose (bounds (sysGraph sys))
+                   case wrap sys v of
+                       Left _    -> arbitrary
+                       Right set -> return set
 
 isWellfounded :: Ord u => Set u -> Bool
 isWellfounded (Set sys v) =
@@ -83,12 +91,13 @@ member (Right (Set sys1 v1)) (Set sys2 v2) =
 _subsetOf, subsetOf, supersetOf, properSubsetOf, properSupersetOf
     :: Ord u => Set u -> Set u -> Bool
 
-s1 `_subsetOf` s2 | isEmptySet s1 = True
+s `_subsetOf` _ | isEmptySet s = True
 (Set sys1 v1) `_subsetOf` (Set sys2 v2) =
-    FS.mkSet (map (in1!) (g1 ! v1)) == FS.mkSet (map (in2!) (g1 ! v2))
+    all (\x -> (in1!x) `FS.elementOf` ys) (g1 ! v1)
     where g1 = sysGraph sys1
           g2 = sysGraph sys2
-          (sys,in1,in2) = sumSystem sys1 sys2
+          (_,in1,in2) = sumSystem sys1 sys2
+          ys = FS.mkSet (map (in2!) (g2 ! v2))
 
 as `subsetOf`   bs = cardinality as <= cardinality bs && as `_subsetOf` bs
 as `supersetOf` bs = bs `subsetOf` as
@@ -177,7 +186,7 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
 
 -- XXX: 汚いなぁ
 powerset :: (Show u, Ord u) => Set u -> Set u
-powerset s@(Set sys v) = constructSet (g',t) v'
+powerset (Set sys v) = constructSet (g',t) v'
     where g = sysGraph sys
           t = sysTagging sys
           (lb,ub) = bounds g
@@ -222,20 +231,20 @@ equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
     where f' a b = f (wrap sys a) (wrap sys b)
           g = sysGraph sys
-          l = zip [ub+1..] (classify f' (g ! v))
+          l = zip [ub+1..] (classifyList f' (g ! v))
           (lb,ub) = bounds (sysGraph sys)
           v' = ub + length l + 1
           g' = array (lb, v') ((v', map fst l) : l ++ assocs g)
 
-classify :: (a -> a -> Bool) -> [a] -> [[a]]
-classify f = foldl phi []
+classifyList :: (a -> a -> Bool) -> [a] -> [[a]]
+classifyList f = foldl phi []
     where phi (s:ss) x | f (head s) x = (x:s) : ss
                        | otherwise    = s : phi ss x
           phi [] x = [[x]]
 
 -- filter という名前の方がよい?
 separate :: Ord u => (Either u (Set u) -> Bool) -> (Set u -> Set u)
-separate f s@(Set sys v) =
+separate f (Set sys v) =
     constructSet (g',t) v'
     where g = sysGraph sys
           t = sysTagging sys
@@ -262,13 +271,34 @@ data System u =
     , sysAttrTable    :: (Table Attr)
     }
 
--- XXX
+-- for debuging
 instance (Ord u, Show u) => (Show (System u)) where
-    showsPrec d System{ sysGraph = g, sysTagging = t}
+    showsPrec d System{ sysGraph = g, sysTagging = t, sysAttrTable = attr}
         | d == 11   = ('(':) . f . (')':)
         | otherwise = f
         where f = ("System "++) . (showsPrec 11 g) . (' ':)
-                  . (showsPrec 11 (fmToList t))
+                  . (showsPrec 11 (fmToList t)) . (' ':)
+                  . (showsPrec 11 attr)
+
+instance (Ord u, Arbitrary u) => Arbitrary (System u) where
+    arbitrary = sized sys
+        where sys n = do ub <- choose (0,n)
+                         xs <- mapM (f ub) [0..ub]
+                         let g = array (0,ub) xs
+                         ys <- foldM h [] [i | (i,children)<-xs, null children]
+                         let t = listToFM ys
+                             (sys,m) = normalize (g,t)
+                         return sys
+              f ub x =
+                  do y <- choose (0, (ub+1)*2)
+                     children <- sequence (take y (repeat (choose (0,ub))))
+                     return (x, nub (sort (children)))
+              h as x =
+                  do b <- arbitrary
+                     if b
+                        then return as
+                        else do e <- arbitrary
+                                return ((x,e) : as)
 
 mkSystem :: Ord u => Graph -> Tagging u -> System u
 mkSystem g t =
@@ -362,24 +392,20 @@ mkG g =
     newListArray (bounds g) [Right (FS.mkSet parents, FS.unitSet v)
                              | (v, parents) <- assocs (transposeG g)]
 
-apply :: G st -> Vertex -> ST st Vertex
-apply g x = do (x',_,_) <- apply' g x
-               return x'
-
-apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex, FS.Set Vertex)
-apply' g x =
+apply :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex, FS.Set Vertex)
+apply g x =
     do y' <- readArray g x
        case y' of
           Right (parents,vs) -> return (x,parents,vs)
           Left y ->
-              do (z, parents, vs) <- apply' g y
+              do (z, parents, vs) <- apply g y
                  unless (y==z) (writeArray g x (Left z)) -- 経路圧縮
                  return (z, parents, vs)
 
 collapse :: G st -> Vertex -> Vertex -> ST st Vertex
 collapse g a' b' =
-    do (a,pas,as) <- apply' g a'
-       (b,pbs,bs) <- apply' g b'
+    do (a,pas,as) <- apply g a'
+       (b,pbs,bs) <- apply g b'
        if a==b
           then return a
           else do writeArray g a' (Left b')
@@ -387,18 +413,17 @@ collapse g a' b' =
                   return b'
 
 collapseList :: G st -> [Vertex] -> ST st Vertex
-collapseList g []     = return undefined
+collapseList _ []     = return undefined
 collapseList g (x:xs) = foldM (collapse g) x xs
 
 -----------------------------------------------------------------------------
 
 type Block = FS.Set Vertex
-type P st = FiniteMap Rank (STRef st [Block])
 
 refine :: G st -> [(Rank, STRef st [Block])] -> Rank -> Vertex -> ST st ()
 refine g p rank v =
-    do (_,parents,_) <- apply' g v
-       mapM_ (phi parents) p
+    do (_,parents,_) <- apply g v
+       unless (FS.isEmptySet parents) (mapM_ (phi parents) p)
     where -- phi :: FS.Set Vertex -> (Rank, STRef st [Block]) -> ST st ()
           phi parents (i,ref)
               | i <= rank = return ()
@@ -420,7 +445,7 @@ minimize tg@(g,t) = ((g',t'), m)
                             ( array (bounds g) xs
                             , array (0, size - 1) ys
                             )
-             where phi (n,xs,ys) (v, Left _)       = (n, xs, ys)
+             where phi (n,xs,ys) (_, Left _)       = (n, xs, ys)
                    phi (n,xs,ys) (v, Right (_,vs)) =
                        ( n+1
                        , [(x,n) | x <- FS.setToList vs] ++ xs
@@ -470,7 +495,7 @@ stabilize :: G st -> Block -> [Block] -> ST st [Block]
 stabilize g b xs =
     do let b' = FS.setToList b
        tmp <- mapM (\x ->
-                    do (_,parents,_) <- apply' g x
+                    do (_,parents,_) <- apply g x
                        return (x, parents `FS.intersect` b)) b'
        let table :: Array Vertex (FS.Set Vertex)
            table = array (head b', last b') tmp
@@ -481,10 +506,13 @@ stabilize g b xs =
     where f :: Array Vertex (FS.Set Vertex) -> [Block] -> [Block]
           f table xs = loop [] xs xs
               where loop :: [Block] -> [Block] -> [Block] -> [Block]
-                    loop ss [] qs     = ss
-                    loop ss ps []     = ss ++ ps
-                    loop ss ps (q:qs) = case foldl phi (ss,[],qs) ps of
-                                        (ss',ps',qs') -> loop ss' ps' qs'
+                    loop ss [] _  = ss
+                    loop ss ps [] = ss ++ ps
+                    loop ss ps (q:qs)
+                        | FS.isEmptySet splitter = loop ss ps qs
+                        | otherwise =
+                            case foldl phi (ss,[],qs) ps of
+                            (ss',ps',qs') -> loop ss' ps' qs'
                         where splitter = FS.unionManySets
                                            (map (table!) (FS.setToList q))
                               phi (ss,ps,qs) p
