@@ -491,24 +491,26 @@ stabilize g b xs =
            preds = array (head b', last b') tmp
                    -- setToList の結果はソートされているので、
                    -- headとlastで最小元と最大元が得られる
-           ys  = loop preds [] xs xs
+           (ss,ps) = partition fsIsSingleton xs
+           ys  = loop preds ss ps xs
        return ys
     where loop :: Array Vertex (FS.Set Vertex)
                -> [Partition]
                -> [Partition]
                -> [Partition]
                -> [Partition]
+          loop preds ss [] qs     = ss
           loop preds ss ps []     = ss ++ ps
           loop preds ss ps (q:qs) =
               case foldl phi (ss,[],qs) ps of
               (ss',ps',qs') -> loop preds ss' ps' qs'
               where splitter = FS.unionManySets (map (preds!) (FS.setToList q))
                     phi (ss,ps,qs) p
-                        | fsIsSingleton p = (p:ss,ps,qs)
+                        | fsIsSingleton p = (p:ss, ps, qs)
                         | otherwise =
                             case fsSplit p splitter of
                             (True,a,b) -> (ss, a:b:ps, a:b:qs)
-                            _          -> (ss, p : ps, qs)
+                            _          -> (ss, p:ps, qs)
 
 -----------------------------------------------------------------------------
 
