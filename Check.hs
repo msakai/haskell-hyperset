@@ -21,7 +21,7 @@ instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
            f (elems d)
     coarbitrary set =
         variant v . coarbitrary (fmToList t) . coarbitrary (assocs g)
-        where (g,t,v) = picture set
+        where (g,v,t) = picture set
 
 genGraph :: Gen Graph
 genGraph = sized genGraph'

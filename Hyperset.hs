@@ -44,15 +44,14 @@ module Hyperset
     , separate
 
     -- * System of equations
-    , Var
     , SystemOfEquations
+    , Var
     , Solution
     , solve
 
     -- * Accessible Graph.
     , Tagging
     , Decoration
-    , Picture
     , decorate
     , picture
 
@@ -281,16 +280,19 @@ constructSet tg v = Set sys (m!v)
   System of equation
 --------------------------------------------------------------------}
 
--- |Variable in system of equation.
-type Var = Int
-
--- |System of equations.
+-- |System of equations in X is a family of family of equations
+-- {x = a_x | x∈X}, exactly one equation for each indeterminant
+-- x∈X⊆@Var@.
 type SystemOfEquations u = Array Var (Set (Either u Var))
+
+-- |Indeterminant in system of equation.
+type Var = Int
 
 -- |Solution of system of equation.
 type Solution u = Array Var (Set u)
 
 -- |Solve a system of equation.
+-- By the solution lemma, every system of equations has a unique solution.
 solve :: Ord u => SystemOfEquations u -> Solution u
 solve equations = array (bounds equations)
                   [(i, Set sys (m!i)) | i <- indices equations]
@@ -334,25 +336,30 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
   Accessible Graph
 --------------------------------------------------------------------}
 
--- |A tagging is a partial map t: G->U that assigns to childless node
--- of G an element of U.
+-- |Let G be an accessible graph, and let U={φ}∪@u@ be a collection
+-- containing the empty set and urelements. A tagging of G is a function
+-- t: G->U that assigns to each childless node of G an element of U.
+-- And we interpret @lookupFM t n == Nothing@ for a childless node n of G 
+-- as t(v)=φ.
 type Tagging u = FiniteMap Vertex u
 
--- |FIXME
+-- |A decoration is a function d defined on each node n of G such that
+--
+-- * d(n) = t(n) (if n is childless) 
+--
+-- * d(n) = {d(m) | m∈children(n)}
+--
 type Decoration u = Table (UrelemOrSet u)
 
--- |FIXME
-type Picture u = (Graph, Tagging u, Vertex)
-
--- |FIXME
+-- |compute the decoration.
 decorate :: (Ord u) => Graph -> Tagging u -> Decoration u
 decorate g t = d
     where (sys,m) = mkSystem (g,t)
           d = array (bounds g) [(v, toUrelemOrSet sys (m!v)) | v <- indices g]
 
--- |FIXME
-picture :: (Ord u) => Set u -> Picture u
-picture (Set sys v) = (sysGraph sys, sysTagging sys, v)
+-- |Tagged apg(accessible pointed graph) that pictures the set.
+picture :: (Ord u) => Set u -> (Graph, Vertex, Tagging u)
+picture (Set sys v) = (sysGraph sys, v, sysTagging sys)
 
 {--------------------------------------------------------------------
   Conversion
