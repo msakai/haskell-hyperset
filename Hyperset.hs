@@ -142,7 +142,7 @@ solve (array (0,1) [(0, mkSet [Left (Right 1)]), (1, mkSet [Left (Right 0)])])
 => array (0,1) [(0,Set (System (array (0,0) [(0,[0])]) []) 0),(1,Set (System (array (0,0) [(0,[0])]) []) 0)]
 -}
 
--- XXX: ‰˜‚¢‚È‚Ÿ
+-- XXX: æ±šã„ãªã
 mkTaggedGraphFromEquations
     :: Ord u => Array Var (Set (Either u Var)) -> TaggedGraph u
 mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
@@ -175,7 +175,7 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
                                        , (x, ub+1)
                                        )
 
--- XXX: ‰˜‚¢‚È‚Ÿ
+-- XXX: æ±šã„ãªã
 powerset :: Ord u => Set u -> Set u
 powerset (Set sys v) = constructSet (g',t) qs v'
     where g = sysGraph sys
@@ -187,7 +187,7 @@ powerset (Set sys v) = constructSet (g',t) qs v'
           g'  = array (lb, ub') ((v', [a | (a,_) <- p]) : p ++ assocs g)
           qs = [[i] | i <- indices g] : [ [[i]] | i <- [ub+1..ub'] ]
 
--- XXX: ‰˜‚¢‚È‚Ÿ
+-- XXX: æ±šã„ãªã
 union :: Ord u => Set u -> Set u -> Set u
 union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) qs v
     where g1 = sysGraph sys1
@@ -270,7 +270,7 @@ isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
 
 -----------------------------------------------------------------------------
-{- FIXME: ˜AŒ‹¬•ª–ˆ‚ÉƒOƒ‰ƒt‚ð•ª‚¯‚éˆ—‚ð“ü‚ê‚é? -}
+{- FIXME: é€£çµæˆåˆ†æ¯Žã«ã‚°ãƒ©ãƒ•ã‚’åˆ†ã‘ã‚‹å‡¦ç†ã‚’å…¥ã‚Œã‚‹? -}
 
 constructSet :: Ord u => TaggedGraph u -> [QuoSet Vertex] -> Vertex -> Set u
 constructSet tg qs v = case wrap sys (m!v) of
@@ -317,11 +317,11 @@ wellfoundedTable g = table
 type EquivClass a = [a]
 type QuoSet a = [EquivClass a]
 
--- mergeQuoSets E {A/E, B/E, ...} = (A¾B¾...)/E
+-- mergeQuoSets E {A/E, B/E, ...} = (AâˆªBâˆª...)/E
 mergeQuoSets :: (a -> a -> Bool) -> [QuoSet a] -> QuoSet a
 mergeQuoSets eq = foldl (mergeQuoSet2 eq) []
 
--- mergeQuoSet2 E A/E B/E = (A¾B)/E
+-- mergeQuoSet2 E A/E B/E = (AâˆªB)/E
 mergeQuoSet2 :: (a -> a -> Bool) -> QuoSet a -> QuoSet a -> QuoSet a
 mergeQuoSet2 eq = foldl phi
     where phi qa e1 = g qa
