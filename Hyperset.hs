@@ -2,7 +2,7 @@ module Hyperset
     ( Set
     , UrelemOrSet
     , Var
-    , SystemOfEquation
+    , SystemOfEquations
     , Solution
     , atom
     , emptySet
@@ -42,21 +42,21 @@ import Debug.QuickCheck
 
 -----------------------------------------------------------------------------
 
--- |A set. (FIXME)
+-- |A set. 
 data Ord u => Set u = Set !(System u) !Vertex deriving Show
 
 -- Set u のsupertypeとして定義できたらいいのになぁ。
 -- |FIXME
 type UrelemOrSet u = Either u (Set u)
 
--- |FIXME
-type Var                = Int
+-- |Variable in system of equation.
+type Var = Int
 
--- |FIXME
-type SystemOfEquation u = Array Var (Set (Either u Var))
+-- |System of equations.
+type SystemOfEquations u = Array Var (Set (Either u Var))
 
--- |FIXME
-type Solution u         = Array Var (Set u)
+-- |Solutions of system of equation.
+type Solution u = Array Var (Set u)
 
 instance Ord u => Eq (Set u) where
     s1@(Set sys1 v1) == s2@(Set sys2 v2) =
@@ -176,7 +176,7 @@ singleton :: Ord u => UrelemOrSet u -> Set u
 singleton u = fromList [u]
 
 -- |Solve a system of equation.
-solve :: Ord u => SystemOfEquation u -> Solution u
+solve :: Ord u => SystemOfEquations u -> Solution u
 solve equations = array (bounds equations)
                   [(i, Set sys (m!i)) | i <- indices equations]
     where (sys,m)  = mkSystem $ mkTaggedGraphFromEquations equations
