@@ -607,11 +607,7 @@ stabilize g b xs =
                                   | fsIsSingleton p = (p:ss, ps, qs)
                                   | otherwise =
                                       case fsSplit p splitter of
-                                      Just (a,b) ->
-                                          ( ss
-                                          , a:b:ps
-                                          , [x | x <- [a,b], x/=splitter] ++ qs
-                                          )
+                                      Just (a,b) -> (ss, a:b:ps, a:b:qs)
                                       Nothing    -> (ss, p:ps, qs)
 
 {--------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import Hyperset
-import Array
-import List (intersperse)
+import Data.Array
+import Data.List (intersperse)
+import Data.FiniteMap
 
 showSet :: (Show u, Ord u) => Set u -> String
 showSet s | isWellfounded s = f s
@@ -18,6 +19,11 @@ test1 = powerset test0
 
 test2 :: Set Int
 test2 = powerset test1
+
+test3 :: Bool
+test3 = cardinality (powerset x) == 8
+    where x :: Set Int
+          Right x = decorate (array (0,4) [(0,[1,3,4]),(1,[0,1,2,4]),(2,[]),(3,[2,3,4]),(4,[])]) (listToFM [(4,-1)]) ! 0
 
 -- Trueになるべきだけど、現在はFalseになってしまう
 testSolve :: Bool

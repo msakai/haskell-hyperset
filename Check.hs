@@ -53,52 +53,78 @@ prop_eqReflexive x = x==x
 prop_eqSymmetry :: Set Int -> Set Int -> Bool
 prop_eqSymmetry x y = (x==y) == (y==x)
 
+-----------------------------------------------------------------------------
+
 prop_cardinalityNonNegative :: Set Int -> Bool
 prop_cardinalityNonNegative x = cardinality x >= 0
 
 prop_cardinality1 :: Set Int -> Bool
 prop_cardinality1 x = cardinality x == length (toList x)
 
-{-
-prop_propersubsetIsSubset (x :: Set Int) y =
-    x `properSubsetOf` y ==> x `subsetOf` y
--}
+-----------------------------------------------------------------------------
 
-prop_toList (x :: Set Int) = fromList (toList x) == x
+prop_toList :: Set Int -> Bool
+prop_toList x = fromList (toList x) == x
 
-prop_unionSize (x :: Set Int) y =
+-----------------------------------------------------------------------------
+
+prop_unionAssoc	:: Set Int -> Set Int -> Set Int -> Bool
+prop_unionAssoc	x y z = (x `union` y) `union` z == x `union` (y `union` z)
+
+prop_unionComm :: Set Int -> Set Int -> Bool
+prop_unionComm x y = x `union` y == y `union` x
+
+prop_unionAbsorb :: Set Int -> Set Int -> Bool
+prop_unionAbsorb x y = (x `union` y) `union` y == (x `union` y)
+
+prop_unionSize :: Set Int -> Set Int -> Bool
+prop_unionSize x y =
     cardinality (x `union` y) <= cardinality x + cardinality y &&
     cardinality x <= cardinality (x `union` y) &&
     cardinality y <= cardinality (x `union` y)
 
-prop_unionComm :: Set Int -> Set Int -> Bool
-prop_unionComm s1 s2 = s1 `union` s2 == s2 `union` s1
-
-    
-prop_unionInclusion (x :: Set Int) y = x `isSubsetOf` z && y `isSubsetOf` z
+prop_unionInclusion :: Set Int -> Set Int -> Bool
+prop_unionInclusion x y = x `isSubsetOf` z && y `isSubsetOf` z
     where z = x `union` y
 
-prop_intersectionSize (x :: Set Int) y  = 
-    cardinality (x `intersection` y) <= cardinality x &&
-    cardinality (x `intersection` y) <= cardinality y
-prop_intersectionInclusion (x, y :: Set Int) = z `isSubsetOf` x && z `isSubsetOf` y
-    where z = x `intersection` y
+-----------------------------------------------------------------------------
+
+prop_intersectionAssoc :: Set Int -> Set Int -> Set Int -> Bool
+prop_intersectionAssoc x y z = (x `intersection` y) `intersection` z == x `intersection` (y `intersection` z)
 
 prop_intersectionComm :: Set Int -> Set Int -> Bool
 prop_intersectionComm s1 s2 = s1 `intersection` s2 == s2 `intersection` s1
 
+prop_intersectionAbsorb :: Set Int -> Set Int -> Bool
+prop_intersectionAbsorb x y = (x `intersection` y) `intersection` y == (x `intersection` y)
+
+prop_intersectionSize :: Set Int -> Set Int -> Bool
+prop_intersectionSize x y  = 
+    cardinality (x `intersection` y) <= cardinality x &&
+    cardinality (x `intersection` y) <= cardinality y
+
+prop_intersectionInclusion :: Set Int -> Set Int -> Bool
+prop_intersectionInclusion x y = z `isSubsetOf` x && z `isSubsetOf` y
+    where z = x `intersection` y
+
+-----------------------------------------------------------------------------
 -- 時間がかかり過ぎないようにサイズを予め制限しておく
 
-prop_powersetSize (x :: Set Int) =
+prop_powersetSize :: Set Int -> Property
+prop_powersetSize x =
     c <= 8 ==> 2^c == cardinality (powerset x)
     where c = cardinality x
 
-prop_powerset1 (x :: Set Int) =
+prop_powerset1 :: Set Int -> Property
+prop_powerset1 x =
     (cardinality x) <= 8 ==> all f (toList (powerset x))
     where f (Left _)  = False
           f (Right z) = z `isSubsetOf` x
 
-prop_powerset2 (x :: Set Int) =
+prop_powerset2 :: Set Int -> Property
+prop_powerset2 x =
    (cardinality x) <= 8 ==>
         (Right x) `member` px && (Right empty) `member` px
     where px = powerset x
+
+-----------------------------------------------------------------------------
