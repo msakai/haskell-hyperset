@@ -34,7 +34,7 @@ import Data.Array.IArray
 import Data.Array.ST
 import Data.FiniteMap
 import qualified Data.Set as FS
-import Data.List hiding (union)
+import Data.List (mapAccumL, intersperse)
 import Data.STRef
 import Control.Monad (unless, foldM, mapM_, mapM)
 import Control.Monad.ST (runST, ST)
@@ -288,7 +288,7 @@ instance (Ord u, Arbitrary u) => Arbitrary (System u) where
               f ub x =
                   do y <- choose (0, (ub+1)*2)
                      children <- sequence (take y (repeat (choose (0,ub))))
-                     return (x, nub (sort (children)))
+                     return (x, nubAndSort children)
               h as x =
                   do b <- arbitrary
                      if b
@@ -416,12 +416,16 @@ refine :: G st -> [(Rank, (STRef st [Block], Block))] ->
           Rank -> Vertex -> ST st ()
 refine g p rank v =
     do (_,parents,_) <- apply g v
-       unless (FS.isEmptySet parents) (foldM_ phi parents p >> return ())
-    where phi parents (i,(ref,bi))
-              | i <= rank = return parents
+       unless (FS.isEmptySet parents) (foldM phi parents p >> return ())
+    where phi xs (i,(ref,bi))
+              | i <= rank = return xs
+              | splitterCardinality == 0 ||
+                splitterCardinality == FS.cardinality bi
+                  = return xs
               | otherwise = do modifySTRef ref (foldr phi [])
-                               return (parents `FS.minusSet` splitter)
-              where splitter = parents `FS.intersect` bi
+                               return (xs `FS.minusSet` splitter)
+              where splitter = xs `FS.intersect` bi
+		    splitterCardinality = FS.cardinality splitter
                     phi p ps
                         | fsIsSingleton p = p : ps
                         | otherwise =
@@ -443,7 +447,7 @@ minimize tg@(g,t) = ((g',t'), m)
                    phi (n,xs,ys) (v, Right (_,vs)) =
                        ( n+1
                        , [(x,n) | x <- FS.setToList vs] ++ xs
-                       , (n, sort $ nub $ map (m!) (g!v)) : ys
+                       , (n, nubAndSort $ map (m!) (g!v)) : ys
                        )
                    hoge = runST (do gg <- minimize' tg
                                     assocs <- getAssocs gg
@@ -539,6 +543,10 @@ fsSplit x splitter = seq x $ seq splitter $
            else Just (i, x `FS.minusSet` i)
     where i = x `FS.intersect` splitter
           isize = FS.cardinality i
+
+nubAndSort :: (Ord a) => [a] -> [a]
+-- nubAndSort = nub . sort
+nubAndSort = FS.setToList . FS.mkSet
 
 -----------------------------------------------------------------------------
 
