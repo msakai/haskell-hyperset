@@ -12,14 +12,15 @@
 
 module Hyperset
     ( Set
-    , setToList
 
     , atom
     , emptySet
     , singleton
-    , mkSet
     , Var
     , solve
+
+    , toList
+    , fromList
 
     , powerset
     , union
@@ -98,20 +99,21 @@ wrap sys v = case lookupFM (sysTagging sys) v of
              Just e  -> Left e
              Nothing -> Right (Set sys v)
 
-setToList :: Ord u => Set u -> [Either u (Set u)]
-setToList (Set sys v) = map (wrap sys) (sysGraph sys ! v)
-
 atom :: Ord u => Set u
 atom = constructSet (array (0,0) [(0,[0])], emptyFM) [[[0]]] 0
 
 emptySet :: Ord u => Set u
-emptySet = mkSet []
+emptySet = fromList []
 
 singleton :: Ord u => Either u (Set u) -> Set u
-singleton u = mkSet [u]
+singleton u = fromList [u]
 
-mkSet :: Ord u => [Either u (Set u)] -> Set u
-mkSet xs = constructSet (array (0,n) ((n,children):l), t) ([[n]]:qs) n
+-- elems って名前の方がよい?
+toList :: Ord u => Set u -> [Either u (Set u)]
+toList (Set sys v) = map (wrap sys) (sysGraph sys ! v)
+
+fromList :: Ord u => [Either u (Set u)] -> Set u
+fromList xs = constructSet (array (0,n) ((n,children):l), t) ([[n]]:qs) n
     where ((n,l,t,qs), children) = mapAccumL phi (0,[],emptyFM,[]) xs
           phi (n,l,t,qs) (Left u) =
               ((n+1, (n,[]):l, addToFM t n u, [[n]]:qs), n)
@@ -138,7 +140,7 @@ solve equations = array (bounds equations)
 solve (array (0,0) [(0,atom)])
 => array (0,0) [(0,Set (System (array (0,0) [(0,[0])]) []) 0)]
 
-solve (array (0,1) [(0, mkSet [Left (Right 1)]), (1, mkSet [Left (Right 0)])])
+solve (array (0,1) [(0, fromList [Left (Right 1)]), (1, fromList [Left (Right 0)])])
 => array (0,1) [(0,Set (System (array (0,0) [(0,[0])]) []) 0),(1,Set (System (array (0,0) [(0,[0])]) []) 0)]
 -}
 
@@ -217,7 +219,7 @@ a `intersect` b = separate (\x -> x `elementOf` b) a
 minus :: Ord u => Set u -> Set u -> Set u
 a `minus` b = separate (\x -> not (x `elementOf` b)) a
 
--- equivClass (\(Left n) (Left m) -> n `mod` 3 == m `mod` 3) (mkSet [Left 1, Left 2, Left 3, Left 4])
+-- equivClass (\(Left n) (Left m) -> n `mod` 3 == m `mod` 3) (fromList [Left 1, Left 2, Left 3, Left 4])
 equivClass :: Ord u => (Either u (Set u) -> Either u (Set u) -> Bool) ->
                        (Set u -> Set u)
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) qs v'
@@ -229,6 +231,7 @@ equivClass f (Set sys v) = constructSet (g', sysTagging sys) qs v'
           g' = array (lb, v') ((v', map fst l) : l ++ assocs g)
           qs = [ [[i] | i <- indices g], [[v']] ] ++ [[[i]] | (i,_) <- l]
 
+-- filter という名前の方がよい?
 separate :: Ord u => (Either u (Set u) -> Bool) -> (Set u -> Set u)
 separate f s@(Set sys v) =
     constructSet (g',t) qs v'
@@ -240,18 +243,20 @@ separate f s@(Set sys v) =
           v'  = ub+1
           qs  = [ [[v']], [[i] | i <- indices g] ]
 
+-- partition :: Ord u => (Either u (Set u) -> Bool) -> Set u -> (Set u, Set u)
+
 mapSet :: (Ord u, Ord u') =>
           (Either u (Set u) -> Either u' (Set u')) -> (Set u -> Set u')
-mapSet f = mkSet . map f . setToList
+mapSet f = fromList . map f . toList
 
 -----------------------------------------------------------------------------
 
 elementOf :: Ord u => (Either u (Set u)) -> Set u -> Bool
-elementOf x set = x `elem` setToList set
+elementOf x set = x `elem` toList set
 
 _subsetOf, subsetOf, supersetOf, properSubsetOf, properSupersetOf
     :: Ord u => Set u -> Set u -> Bool
-as `_subsetOf`  bs = and [a `elementOf` bs | a <- setToList as]
+as `_subsetOf`  bs = and [a `elementOf` bs | a <- toList as]
 as `subsetOf`   bs = cardinality as <= cardinality bs && as `_subsetOf` bs
 as `supersetOf` bs = bs `subsetOf` as
 as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
@@ -299,6 +304,12 @@ reachabilityTable g t = table
           merge = foldl (flip (zipWith' unionSortedList)) []
 
 -----------------------------------------------------------------------------
+
+{-
+data Wellfoundedness
+    = Wellfounded
+    | Nonwellfounded !Bool
+-}
 
 wellfoundedTable :: Graph -> Table Bool
 wellfoundedTable g = table
