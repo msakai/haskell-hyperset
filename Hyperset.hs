@@ -79,9 +79,8 @@ isBisimilar s1@(Set sys1 v1) s2@(Set sys2 v2) = m!v1 == m!(v2+offset)
           (lb1,ub1) = bounds g1
           (lb2,ub2) = bounds g2
           offset = ub1 + 1 - lb2
-          mu = ub2 + offset + 1
           t' = sysTagging sys1 `plusFM` listToFM [(k+offset,e) | (k,e) <- fmToList (sysTagging sys2)]
-          g' = array (lb1,mu) ((mu,[v1,v2+offset]) : assocs g1 ++ [(k+offset, map (offset+) e) | (k,e) <- assocs g2])
+          g' = array (lb1,ub2+offset) (assocs g1 ++ [(k+offset, map (offset+) e) | (k,e) <- assocs g2])
           (_,m) = minimize (g',t')
 
 isWellfounded :: Ord u => Set u -> Bool
@@ -360,10 +359,6 @@ apply :: G st -> Vertex -> ST st Vertex
 apply g x = do (x',_) <- apply' g x
                return x'
 
-parents :: G st -> Vertex -> ST st (FS.Set Vertex)
-parents g x = do (_,xs) <- apply' g x
-                 return xs
-
 apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex)
 apply' g x =
     do y' <- readArray g x
@@ -394,12 +389,12 @@ type Partition = [Vertex]
 type P st = FiniteMap Rank (STRef st [Partition])
 
 refine :: G st -> [(Rank, STRef st [Partition])] -> Rank -> Vertex -> ST st ()
-refine g p r v =
+refine g p rank v =
     do (_,vs) <- apply' g v
        mapM_ (phi vs) p
     where -- phi :: FS.Set Vertex -> (Rank, STRef st [Partition]) -> ST st ()
-          phi vs (k,ref)
-              | k <= r    = return ()
+          phi vs (i,ref)
+              | i <= rank = return ()
               | otherwise = modifySTRef ref (concatMap f)
               where f p = [x | x <- [pa,pb], not (null x)]
                         where (pa,pb) = partition (`FS.elementOf` vs) p
@@ -428,8 +423,9 @@ minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
     do g <- mkGFromGraph graph
        let b :: FiniteMap Rank [Vertex]
            b = addListToFM_C (\old new -> new++old) emptyFM
-                             [(r,[x]) | (x,(_,r)) <- assocs (attrTable graph)]
-       p' <- mapM (\(r,vs) -> do ref <- newSTRef [vs]; return (r,ref))
+                             [(rank,[x])
+                              | (x,(_,rank)) <- assocs (attrTable graph)]
+       p' <- mapM (\(rank,vs) -> do ref <- newSTRef [vs]; return (rank,ref))
                   (fmToList b)
        let -- p :: P st
            p = listToFM p'
@@ -440,12 +436,12 @@ minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
        case lookupFM p (Rank 0) of
            Just ref -> modifySTRef ref (divideRank0 tagging)
            Nothing  -> return ()
-       let loop (i,ref) =
+       let loop (rank, ref) =
                do di <- readSTRef ref
-                  let (Just bi) = lookupFM b i
+                  let (Just bi) = lookupFM b rank
                   di <- stabilize g bi di
-                  let f xs@(x:_) = do x <- collapseList g xs
-                                      refine g p' i x
+                  let f xs = do x <- collapseList g xs
+                                refine g p' rank x
                   mapM_ f di
        -- fmToList の結果がソートされてることを前提としている
        mapM_ loop (fmToList (delFromFM p RankNegInf))
@@ -453,25 +449,40 @@ minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
 
 -- XXX
 stabilize :: G st -> Partition -> [Partition] -> ST st [Partition]
-stabilize g b xs = do ys <- liftM (map FS.setToList) (f xs' xs')
-                      {- trace (seq xs $ seq ys $ show (xs,ys)) $ -}
-                      return ys
-    where b'  = FS.mkSet b
-          xs' = map FS.mkSet xs
-          f newPS []     = return newPS
-          f newPS (q:qs) =
-              do pre <- liftM (FS.intersect b' . FS.unionManySets)
-                              (mapM (parents g) (FS.setToList q))
-                 let g [] = ([],[])
-                     g (p:ps) =
-                         if not (FS.isEmptySet a || FS.isEmptySet b)
-                         then (done, [a,b] ++ qs)
-                         else (p : done, qs)
-                         where a = p `FS.intersect` pre
-                               b = p `FS.minusSet` pre
-                               (done,qs) = g ps
-                     (done,qs') = g newPS
-                 f (done++qs') (qs'++qs)          
+stabilize g b xs =
+    do let b' = FS.mkSet b
+       tmp <- mapM (\x ->
+                    do (_,preds) <- apply' g x
+                       return (x, preds `FS.intersect` b')) b
+       let predsArray :: Array Vertex (FS.Set Vertex)
+           predsArray = array (minimum b, maximum b) tmp
+           xs' = map FS.mkSet xs
+           ys  = map FS.setToList (f predsArray [] xs' xs')
+       return ys
+    where -- f predsArray ss ps qs
+          -- ss: singletonのリスト。
+          --     singletonはこれ以上分割する必要はないので別にしておく。
+          -- ps: 作業中の分割
+          -- qs: これから分割を試すのに使うためのリスト
+          f predsArray ss ps []     = ss ++ ps
+          f predsArray ss ps (q:qs) = f predsArray ss' ps' (qs'++qs)
+              where splitter =
+                        FS.unionManySets (map (predsArray!) (FS.setToList q))
+                    (ss',ps',qs') = g ss ps
+                        where g ss [] = (ss,[],[])
+                              g ss (p:ps)
+                                  | not (FS.isEmptySet a) &&
+                                    not (FS.isEmptySet b)
+                                      = let (foo,bar) = partition isSingleton [a,b]
+                                        in ( foo ++ ss
+                                           , bar ++ ps'
+                                           , a : b : qs
+                                           )
+                                  | otherwise = (ss', p : ps', qs)
+                                  where (ss', ps', qs) = g ss ps
+                                        a = p `FS.intersect` splitter
+                                        b = p `FS.minusSet`  splitter
+                                        isSingleton x = FS.cardinality x == 1
 
 divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
 divideRank0 tagging ps = eltsFM fm
