@@ -70,12 +70,13 @@ fsIsSingleton x = FS.cardinality x == 1
 -- unboxed tuple が使われることを期待してタプルで返している
 fsSplit :: (Ord a) => FS.Set a -> FS.Set a -> (Bool, FS.Set a, FS.Set a)
 fsSplit x splitter = seq x $ seq splitter $
-      if FS.isEmptySet i
+      if isize == 0
       then (False, undefined, undefined)
-      else if (FS.cardinality x == FS.cardinality i)
+      else if (isize == FS.cardinality x)
            then (False, undefined, undefined)
            else (True, i, x `FS.minusSet` i)
     where i = x `FS.intersect` splitter
+          isize = FS.cardinality i
 
 showSet :: (Show u, Ord u) => Set u -> String
 showSet s | isWellfounded s = f s
@@ -445,7 +446,7 @@ minimize tg@(g,t) = ((g',t'), m)
 
 -- あんましFiniteMap使う必然性はないんだよなぁ
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
-minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
+minimize' (graph, tagging) =
     do g <- mkG graph
        let b :: FiniteMap Rank Partition
            b = addListToFM_C (\old new -> new `FS.union` old) emptyFM
