@@ -365,8 +365,8 @@ rankTableTest2 = a==b
 
 type G st = STArray st Vertex (Either Vertex (FS.Set Vertex))
 
-mkGFromGraph :: Graph -> ST st (G st)
-mkGFromGraph g =
+mkG :: Graph -> ST st (G st)
+mkG g =
     newListArray (bounds g) [Right (FS.mkSet e) | e <- elems (transposeG g)]
 
 apply :: G st -> Vertex -> ST st Vertex
@@ -374,7 +374,7 @@ apply g x = do (x',_) <- apply' g x
                return x'
 
 apply' :: G st -> Vertex -> ST st (Vertex, FS.Set Vertex)
-apply' g x = seq g (seq x (
+apply' g x =
     do y' <- readArray g x
        case y' of
           Right parents -> return (x,parents)
@@ -382,7 +382,6 @@ apply' g x = seq g (seq x (
               do (z, parents) <- apply' g y
                  unless (y==z) (writeArray g x (Left z)) -- 経路圧縮
                  return (z, parents)
-    ))
 
 collapse :: G st -> Vertex -> Vertex -> ST st Vertex
 collapse g a' b' =
@@ -421,13 +420,14 @@ refine g p rank v =
 
 -----------------------------------------------------------------------------
 
+-- 汚いなぁ
 minimize :: (Ord u) => TaggedGraph u -> (TaggedGraph u, Table Vertex)
-minimize tg@(g,t) = {-trace (seq g $ seq m $ show (g,m)) $ -} ((g',t'), m)
+minimize tg@(g,t) = ((g',t'), m)
     where g' = array (0, sizeFM fm - 1)
                  [(i, sort $ nub $ map (m!) (g!x)) | (i,x:_) <- c]
           t' = listToFM [(m!v,u) | (v,u) <- fmToList t]
           m = array (bounds g) [(x,i) | (i,xs) <- c, x <- xs]
-          c :: [(Int,[Vertex])]
+          c :: [(Vertex,[Vertex])]
           c = zip [0..] (eltsFM fm)
           fm :: FiniteMap Vertex [Vertex]
           fm = addListToFM_C (\old new -> new++old) emptyFM
@@ -440,7 +440,7 @@ minimize tg@(g,t) = {-trace (seq g $ seq m $ show (g,m)) $ -} ((g',t'), m)
 -- あんましFiniteMap使う必然性はないんだよなぁ
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
 minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
-    do g <- mkGFromGraph graph
+    do g <- mkG graph
        let b :: FiniteMap Rank Partition
            b = addListToFM_C (\old new -> new `FS.union` old) emptyFM
                              [(rank, FS.unitSet x)
