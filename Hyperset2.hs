@@ -10,6 +10,11 @@ import Control.Monad.ST
 
 -----------------------------------------------------------------------------
 
+type Tagging u = FiniteMap Vertex u
+type TaggedGraph u = (Graph, Tagging u)
+
+-----------------------------------------------------------------------------
+
 type Rank = Maybe Int
 -- Nothing means -∞.
 -- Assuming that (Ord a => Ord (Maybe a)) and Nothing < Just _.
@@ -109,8 +114,8 @@ partitionM f = foldM g ([],[])
 
 -----------------------------------------------------------------------------
 
-minimize :: Graph -> ST st (G st)
-minimize graph =
+minimize :: (Ord u) => TaggedGraph u -> ST st (G st)
+minimize (graph, tagging) =
     do g <- mkGFromGraph graph
        p_ <- mapM (\(r,vs) -> do ref <- newSTRef [vs]; return (r,ref))
                   (fmToList b)
@@ -120,7 +125,9 @@ minimize graph =
            Just xs@(x:_) ->
                do collapseList g xs
                   refine g p Nothing x
-       let loop (i,ref) = do di <- readSTRef ref
+       let loop (i,ref) = do when (i==Just 0)
+                                  (modifySTRef ref (divideRank0 tagging))
+                             di <- readSTRef ref
                              let f xs = do collapseList g xs
                                            ns <- liftM nub (mapM (apply g) xs)
                                            mapM_ (refine g p i) ns
@@ -134,6 +141,11 @@ minimize graph =
           b :: FiniteMap Rank [Vertex]
           b = addListToFM_C (\old new -> new++old) emptyFM
                             [(r,[x]) | (x,r) <- assocs rankT]
+
+divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
+divideRank0 tagging ps = eltsFM fm
+    where fm = addListToFM_C (\old new -> new++old) emptyFM
+                             [(lookupFM tagging x, [x]) | x <- concat ps]
 
 -----------------------------------------------------------------------------
 
