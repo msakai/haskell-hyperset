@@ -32,6 +32,24 @@ showSet s | isWellfounded s = f s
 
 data Ord u => Set u = Set !(System u) !Vertex deriving Show
 
+instance Ord u => Eq (Set u) where
+    s1@(Set sys1 v1) == s2@(Set sys2 v2) =
+        sysAttrTable sys1 ! v1 == sysAttrTable sys1 ! v2 &&
+        cardinality s1 == cardinality s2 &&
+        isBisimilar s1 s2
+
+isBisimilar :: (Ord u) => Set u -> Set u -> Bool
+isBisimilar s1@(Set sys1 v1) s2@(Set sys2 v2) = m!v1 == m!(v2+offset)
+    where g1 = sysGraph sys1
+          g2 = sysGraph sys2
+          (lb1,ub1) = bounds g1
+          (lb2,ub2) = bounds g2
+          offset = ub1 + 1 - lb2
+          mu = ub2 + offset + 1
+          t' = sysTagging sys1 `plusFM` listToFM [(k+offset,e) | (k,e) <- fmToList (sysTagging sys2)]
+          g' = array (lb1,mu) ((mu,[v1,v2+offset]) : assocs g1 ++ [(k+offset, map (offset+) e) | (k,e) <- assocs g2])
+          (_,m) = minimize (g',t')
+
 isWellfounded :: Ord u => Set u -> Bool
 isWellfounded (Set sys v) =
     case (sysAttrTable sys ! v) of
@@ -245,7 +263,7 @@ collapse g a' b' =
        if a==b
           then return a
           else do writeArray g a' (Left b')
-                  writeArray g b' (Right (as `FS.union` bs))
+                  writeArray g b' (Right (as `FS.union` bs)) -- 不要?
                   return b'
 
 collapseList :: G st -> [Vertex] -> ST st Vertex
