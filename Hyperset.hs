@@ -18,10 +18,14 @@ module Hyperset
     , Var
     , SystemOfEquations
     , Solution
+    , Tagging
+    , Decoration
     , atom
     , emptySet
     , singleton
     , solve
+    , decorate
+    , getPicture
     , toList
     , fromList
     , powerset
@@ -52,7 +56,6 @@ import Data.STRef
 import Control.Monad (unless, foldM, mapM_, mapM)
 import Control.Monad.ST (runST, ST)
 --import Debug.Trace
-import Debug.QuickCheck
 
 -----------------------------------------------------------------------------
 
@@ -72,20 +75,19 @@ type SystemOfEquations u = Array Var (Set (Either u Var))
 -- |Solution of system of equation.
 type Solution u = Array Var (Set u)
 
+-- |Tagging
+type Tagging u = FiniteMap Vertex u
+
+-- |Decoration
+type Decoration u = Table (UrelemOrSet u)
+
 instance Ord u => Eq (Set u) where
+    s1 == s2 | isEmptySet s1 && isEmptySet s2 = True
     s1@(Set sys1 v1) == s2@(Set sys2 v2) =
         sysAttrTable sys1 ! v1 == sysAttrTable sys2 ! v2 &&
         cardinality s1 == cardinality s2 &&
         in1!v1 == in2!v2
         where (_,in1,in2) = mergeSystem sys1 sys2
-
-instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
-    arbitrary = do sys <- arbitrary
-                   v <- choose (bounds (sysGraph sys))
-                   case toSetOrElem sys v of
-                       Left _    -> arbitrary
-                       Right set -> return set
-    coarbitrary (Set sys v) = variant v . coarbitrary sys
 
 -- |A set is wellfounded or not.
 isWellfounded :: Ord u => Set u -> Bool
@@ -148,10 +150,10 @@ as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
 -- (s1 `propertSupersetOf` s2) tells whether s1 is a proper superset of s2.
 as `properSupersetOf` bs = bs `properSubsetOf` as
 
-toSetOrElem :: Ord u => System u -> Vertex -> UrelemOrSet u
-toSetOrElem sys v = case lookupFM (sysTagging sys) v of
-                    Just e  -> Left e
-                    Nothing -> Right (Set sys v)
+toUrelemOrSet :: Ord u => System u -> Vertex -> UrelemOrSet u
+toUrelemOrSet sys v = case lookupFM (sysTagging sys) v of
+                      Just e  -> Left e
+                      Nothing -> Right (Set sys v)
 
 constructSet :: Ord u => TaggedGraph u -> Vertex -> Set u
 constructSet tg v = Set sys (m!v)
@@ -165,7 +167,7 @@ atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
 -- elems って名前の方がよい?
 -- |The elements of a set.
 toList :: Ord u => Set u -> [UrelemOrSet u]
-toList (Set sys v) = map (toSetOrElem sys) (sysGraph sys ! v)
+toList (Set sys v) = map (toUrelemOrSet sys) (sysGraph sys ! v)
 
 -- |Create a set from a list of elements.
 fromList :: Ord u => [UrelemOrSet u] -> Set u
@@ -229,6 +231,14 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
                                        , (x, ub+1)
                                        )
 
+decorate :: (Ord u) => Graph -> Tagging u -> Decoration u
+decorate g t = d
+    where (sys,m) = mkSystem (g,t)
+          d = array (bounds g) [(v, toUrelemOrSet sys (m!v)) | v <- indices g]
+
+getPicture :: (Ord u) => Set u -> (Graph, Tagging u, Vertex)
+getPicture (Set sys v) = (sysGraph sys, sysTagging sys, v)
+
 -- XXX: 汚いなぁ
 -- |The powerset of the set.
 powerset :: (Ord u) => Set u -> Set u
@@ -279,7 +289,7 @@ a `difference` b = separate (\x -> not (x `member` b)) a
 equivClass :: Ord u => (UrelemOrSet u -> UrelemOrSet u -> Bool) ->
                        (Set u -> Set u)
 equivClass f (Set sys v) = constructSet (g', sysTagging sys) v'
-    where f' a b = f (toSetOrElem sys a) (toSetOrElem sys b)
+    where f' a b = f (toUrelemOrSet sys a) (toUrelemOrSet sys b)
           g = sysGraph sys
           l = zip [ub+1..] (classifyList f' (g ! v))
           (lb,ub) = bounds (sysGraph sys)
@@ -300,7 +310,7 @@ separate f (Set sys v) =
           t = sysTagging sys
           (lb,ub) = bounds g
           g'  = array (lb,ub+1) (foo : assocs g)
-              where foo = (v', [child | child <- g!v, f (toSetOrElem sys child)])
+              where foo = (v', [child | child <- g!v, f (toUrelemOrSet sys child)])
           v'  = ub+1
 
 -- partition :: Ord u => (UrelemOrSet u -> Bool) -> Set u -> (Set u, Set u)
@@ -313,7 +323,6 @@ mapSet f = fromList . map f . toList
 
 -----------------------------------------------------------------------------
 
-type Tagging u = FiniteMap Vertex u
 type TaggedGraph u = (Graph, Tagging u)
 
 data System u =
@@ -331,29 +340,6 @@ instance (Ord u, Show u) => (Show (System u)) where
         where f = ("System "++) . (showsPrec 11 g) . (' ':)
                   . (showsPrec 11 (fmToList t)) . (' ':)
                   . (showsPrec 11 attr)
-
-instance (Ord u, Arbitrary u) => Arbitrary (System u) where
-    arbitrary = sized genSys
-        where genSys n =
-                  do ub <- choose (0,n)
-                     xs <- mapM (f ub) [0..ub]
-                     let g = array (0,ub) xs
-                     ys <- foldM h [] [i | (i,children)<-xs, null children]
-                     let (sys,m) = mkSystem (g, listToFM ys)
-                     return sys
-              f ub x =
-                  do y <- choose (0, (ub+1)*2)
-                     children <- sequence (take y (repeat (choose (0,ub))))
-                     return (x, nubAndSort children)
-              h as x =
-                  do b <- arbitrary
-                     if b
-                        then return as
-                        else do e <- arbitrary
-                                return ((x,e) : as)
-    coarbitrary sys = 
-        coarbitrary (fmToList (sysTagging sys)) .
-        coarbitrary (assocs (sysGraph sys))
 
 mkSystem :: Ord u => TaggedGraph u -> (System u, Table Vertex)
 mkSystem (g,t) = (sys, m)
