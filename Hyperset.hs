@@ -13,28 +13,25 @@
 -----------------------------------------------------------------------------
 
 module Hyperset
-    ( Set
+    (
+    -- * Set type
+      Set
     , UrelemOrSet
+
+    -- * System of equations
     , Var
     , SystemOfEquations
     , Solution
+    , solve
+
+    -- * Accessible Graph.
     , Tagging
     , Decoration
-    , atom
-    , emptySet
-    , singleton
-    , solve
+    , Picture
     , decorate
     , picture
-    , toList
-    , fromList
-    , powerset
-    , union
-    , intersection
-    , difference
-    , equivClass
-    , separate
-    -- , mapSet
+
+    -- * Query
     , member
     , subsetOf
     , supersetOf
@@ -44,6 +41,25 @@ module Hyperset
     , cardinality
     , isEmptySet
     , isSingleton
+
+    -- * Construction
+    , atom
+    , emptySet
+    , singleton
+    , powerset
+    , union
+    , intersection
+    , difference
+    , equivClass
+    , separate
+
+    -- * Conversion
+
+    -- ** List
+    , toList
+    , fromList
+
+    -- , mapSet
     ) where
 
 import Data.Graph
@@ -74,11 +90,15 @@ type SystemOfEquations u = Array Var (Set (Either u Var))
 -- |Solution of system of equation.
 type Solution u = Array Var (Set u)
 
--- |Tagging
+-- |A tagging is a partial map t: G->U that assigns to childless node
+-- of G an element of U.
 type Tagging u = FiniteMap Vertex u
 
--- |Decoration
+-- |FIXME
 type Decoration u = Table (UrelemOrSet u)
+
+-- |FIXME
+type Picture u = (Graph, Tagging u, Vertex)
 
 instance Ord u => Eq (Set u) where
     s1 == s2 | isEmptySet s1 && isEmptySet s2 = True
@@ -230,12 +250,15 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
                                        , (x, ub+1)
                                        )
 
+-- |FIXME
+-- Every apg has a unique decoration.
 decorate :: (Ord u) => Graph -> Tagging u -> Decoration u
 decorate g t = d
     where (sys,m) = mkSystem (g,t)
           d = array (bounds g) [(v, toUrelemOrSet sys (m!v)) | v <- indices g]
 
-picture :: (Ord u) => Set u -> (Graph, Tagging u, Vertex)
+-- |FIXME
+picture :: (Ord u) => Set u -> Picture u
 picture (Set sys v) = (sysGraph sys, sysTagging sys, v)
 
 -- XXX: 汚いなぁ

@@ -15,7 +15,7 @@ test.exe: Test.hs Hyperset.hs
 
 .PHONY: test clean doc
 
-doc: Hypeset.hs
+doc: Hyperset.hs
 	haddock -o doc -h Hyperset.hs
 
 test: test.exe
