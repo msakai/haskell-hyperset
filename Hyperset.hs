@@ -447,6 +447,11 @@ minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
        mapM_ loop (fmToList (delFromFM p RankNegInf))
        return g
 
+divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
+divideRank0 tagging ps = eltsFM fm
+    where fm = addListToFM_C (\old new -> new++old) emptyFM
+                             [(lookupFM tagging x, [x]) | x <- concat ps]
+
 -- XXX
 stabilize :: G st -> Partition -> [Partition] -> ST st [Partition]
 stabilize g b xs =
@@ -454,40 +459,24 @@ stabilize g b xs =
        tmp <- mapM (\x ->
                     do (_,preds) <- apply' g x
                        return (x, preds `FS.intersect` b')) b
-       let predsArray :: Array Vertex (FS.Set Vertex)
-           predsArray = array (minimum b, maximum b) tmp
+       let preds :: Array Vertex (FS.Set Vertex)
+           preds = array (minimum b, maximum b) tmp
            xs' = map FS.mkSet xs
-           ys  = map FS.setToList (f predsArray [] xs' xs')
+           ys  = map FS.setToList (loop preds [] xs' xs')
        return ys
-    where -- f predsArray ss ps qs
-          -- ss: singletonのリスト。
-          --     singletonはこれ以上分割する必要はないので別にしておく。
-          -- ps: 作業中の分割
-          -- qs: これから分割を試すのに使うためのリスト
-          f predsArray ss ps []     = ss ++ ps
-          f predsArray ss ps (q:qs) = f predsArray ss' ps' (qs'++qs)
-              where splitter =
-                        FS.unionManySets (map (predsArray!) (FS.setToList q))
-                    (ss',ps',qs') = g ss ps
-                        where g ss [] = (ss,[],[])
-                              g ss (p:ps)
-                                  | not (FS.isEmptySet a) &&
-                                    not (FS.isEmptySet b)
-                                      = let (foo,bar) = partition isSingleton [a,b]
-                                        in ( foo ++ ss
-                                           , bar ++ ps'
-                                           , a : b : qs
-                                           )
-                                  | otherwise = (ss', p : ps', qs)
-                                  where (ss', ps', qs) = g ss ps
-                                        a = p `FS.intersect` splitter
-                                        b = p `FS.minusSet`  splitter
-                                        isSingleton x = FS.cardinality x == 1
-
-divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
-divideRank0 tagging ps = eltsFM fm
-    where fm = addListToFM_C (\old new -> new++old) emptyFM
-                             [(lookupFM tagging x, [x]) | x <- concat ps]
+    where loop preds ss ps []     = ss ++ ps
+          loop preds ss ps (q:qs) =
+              case foldl phi (ss,[],qs) ps of
+	      (ss',ps',qs') -> loop preds ss' ps' qs'
+              where splitter = FS.unionManySets (map (preds!) (FS.setToList q))
+                    phi (ss,ps,qs) p
+                        | not (FS.isEmptySet a) && not (FS.isEmptySet b)
+                            = case partition isSingleton [a,b] of
+                              (ss', ps') -> (ss'++ss, ps'++ps, a:b:qs)
+                        | otherwise = (ss, p : ps, qs)
+                        where a = p `FS.intersect` splitter
+                              b = p `FS.minusSet`  splitter
+                              isSingleton x = FS.cardinality x == 1
 
 -----------------------------------------------------------------------------
 
