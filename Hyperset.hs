@@ -173,29 +173,9 @@ as `properSupersetOf` bs = bs `properSubsetOf` as
   Construction
 --------------------------------------------------------------------}
 
--- |Quine's atom.
--- singleton @(Right atom) == atom@
+-- |Quine's atom: Ω={Ω}.
 atom :: Ord u => Set u
 atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
-
--- elems って名前の方がよい?
--- |The elements of a set.
-toList :: Ord u => Set u -> [UrelemOrSet u]
-toList (Set sys v) = map (toUrelemOrSet sys) (sysGraph sys ! v)
-
--- |Create a set from a list of elements.
-fromList :: Ord u => [UrelemOrSet u] -> Set u
-fromList xs = constructSet (array (0,n) ((n,children):l), t) n
-    where ((n,l,t), children) = mapAccumL phi (0,[],emptyFM) xs
-          phi (n,l,t) (Left u) =
-              ((n+1, (n,[]):l, addToFM t n u), n)
-          phi (n,l,t) (Right (Set sys v)) =
-              ((ub+off+1, l'++l, addListToFM t t'), v+off)
-              where (lb,ub) = bounds (sysGraph sys)
-                    off = n - lb
-                    l'  = [(v+off, [ch+off | ch <- children])
-                           | (v,children) <- assocs (sysGraph sys)]
-                    t'  = [(v+off,u) | (v,u) <- fmToList (sysTagging sys)]
 
 -- |The empty set.
 emptySet :: Ord u => Set u
@@ -365,7 +345,6 @@ type Decoration u = Table (UrelemOrSet u)
 type Picture u = (Graph, Tagging u, Vertex)
 
 -- |FIXME
--- Every apg has a unique decoration.
 decorate :: (Ord u) => Graph -> Tagging u -> Decoration u
 decorate g t = d
     where (sys,m) = mkSystem (g,t)
@@ -374,6 +353,28 @@ decorate g t = d
 -- |FIXME
 picture :: (Ord u) => Set u -> Picture u
 picture (Set sys v) = (sysGraph sys, sysTagging sys, v)
+
+{--------------------------------------------------------------------
+  Conversion
+--------------------------------------------------------------------}
+
+-- |The elements of a set.
+toList :: Ord u => Set u -> [UrelemOrSet u]
+toList (Set sys v) = map (toUrelemOrSet sys) (sysGraph sys ! v)
+
+-- |Create a set from a list of elements.
+fromList :: Ord u => [UrelemOrSet u] -> Set u
+fromList xs = constructSet (array (0,n) ((n,children):l), t) n
+    where ((n,l,t), children) = mapAccumL phi (0,[],emptyFM) xs
+          phi (n,l,t) (Left u) =
+              ((n+1, (n,[]):l, addToFM t n u), n)
+          phi (n,l,t) (Right (Set sys v)) =
+              ((ub+off+1, l'++l, addListToFM t t'), v+off)
+              where (lb,ub) = bounds (sysGraph sys)
+                    off = n - lb
+                    l'  = [(v+off, [ch+off | ch <- children])
+                           | (v,children) <- assocs (sysGraph sys)]
+                    t'  = [(v+off,u) | (v,u) <- fmToList (sysTagging sys)]
 
 {--------------------------------------------------------------------
   Implementation
