@@ -201,9 +201,13 @@ powerset (Set sys v) = constructSet (g',t) v'
           p  = zip [(ub+1)..] (powerList (g!v))
           g' = array (lb, v') ((v', map fst p) : p ++ assocs g)
 
+-- Mark Jones' powerSet
+-- http://www.haskell.org/pipermail/haskell-cafe/2003-June/004484.html
 powerList :: [a] -> [[a]]
 powerList = foldr phi [[]]
-    where phi a xs = map (a:) xs ++ xs
+    where phi x xs = xs /\/ map (x:) xs
+          []     /\/ ys = ys
+          (x:xs) /\/ ys = x : (ys /\/ xs)
 
 -- XXX: 汚いなぁ
 -- |The union of two sets.
@@ -286,7 +290,7 @@ constructSet tg v = Set sys (m!v)
   System of equation
 --------------------------------------------------------------------}
 
--- |System of equations in X is a family of family of equations
+-- |System of equations in X is a family of equations
 -- {x = a_x | x∈X}, exactly one equation for each indeterminant
 -- x∈X⊆'Var'.
 type SystemOfEquations u = Array Var (Set (Either u Var))
