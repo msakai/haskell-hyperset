@@ -2,12 +2,14 @@ import Hyperset
 import Array
 import List (intersperse)
 
+{-
 showSet :: (Show u, Ord u) => Set u -> String
 showSet s | isWellfounded s = f s
 	  | otherwise = "non-wellfounded set"
     where f s = "{" ++ concat (intersperse "," (map g (toList s))) ++ "}"
 	  g (Left u)   = show u
 	  g (Right s') = f s'
+-}
 
 test0 :: Set Int
 --test0 = fromList [Right atom, Right emptySet]

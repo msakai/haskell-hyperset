@@ -1,4 +1,4 @@
-module Hyperset2
+module Hyperset
     ( Set
 
     , atom
