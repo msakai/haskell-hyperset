@@ -64,6 +64,10 @@ prop_unionSize (x :: Set Int) y =
     cardinality (x `union` y) <= cardinality x + cardinality y &&
     cardinality x <= cardinality (x `union` y) &&
     cardinality y <= cardinality (x `union` y)
+
+prop_unionComm :: Set Int -> Set Int -> Bool
+prop_unionComm s1 s2 = s1 `union` s2 == s2 `union` s1
+
     
 prop_unionInclusion (x :: Set Int) y = x `subsetOf` z && y `subsetOf` z
     where z = x `union` y
@@ -74,6 +78,8 @@ prop_intersectionSize (x :: Set Int) y  =
 prop_intersectionInclusion (x, y :: Set Int) = z `subsetOf` x && z `subsetOf` y
     where z = x `intersection` y
 
+prop_intersectionComm :: Set Int -> Set Int -> Bool
+prop_intersectionComm s1 s2 = s1 `intersection` s2 == s2 `intersection` s1
 
 -- 時間がかかり過ぎないようにサイズを予め制限しておく
 

@@ -13,7 +13,10 @@ check.exe: Check.hs Hyperset.hs
 test.exe: Test.hs Hyperset.hs
 	ghc --make $< -o $@
 
-.PHONY: test clean
+.PHONY: test clean doc
+
+doc: Hypeset.hs
+	haddock -o doc -h Hyperset.hs
 
 test: test.exe
 	./test.exe +RTS -xc -RTS

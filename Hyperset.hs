@@ -55,7 +55,6 @@ import Data.List (mapAccumL, intersperse)
 import Data.STRef
 import Control.Monad (unless, foldM, mapM_, mapM)
 import Control.Monad.ST (runST, ST)
---import Debug.Trace
 
 -----------------------------------------------------------------------------
 
