@@ -43,6 +43,7 @@ import Debug.QuickCheck
 
 -----------------------------------------------------------------------------
 
+-- |A set.
 data Ord u => Set u = Set !(System u) !Vertex deriving Show
 
 instance Ord u => Eq (Set u) where
@@ -60,6 +61,7 @@ instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
                        Right set -> return set
     coarbitrary (Set sys v) = variant v . coarbitrary sys
 
+-- |A set is wellfounded or not.
 isWellfounded :: Ord u => Set u -> Bool
 isWellfounded (Set sys v) =
     case (sysAttrTable sys ! v) of
@@ -75,6 +77,7 @@ isSingleton :: Ord u => Set u -> Bool
 isSingleton x = cardinality x == 1
 
 -- 汚いなぁ
+-- |Is the element in the set?
 member :: Ord u => (Either u (Set u)) -> Set u -> Bool
 member (Left x) (Set sys v) =
     any (\y -> lookupFM t y == Just x) (g!v)
@@ -100,6 +103,8 @@ s `_subsetOf` _ | isEmptySet s = True
           (_,in1,in2) = sumSystem sys1 sys2
           ys = FS.mkSet (map (in2!) (g2 ! v2))
 
+-- |Is this a subset?
+-- (s1 `subsetOf` s2) tells whether s1 is a subset of s2.
 as `subsetOf`   bs = cardinality as <= cardinality bs && as `_subsetOf` bs
 as `supersetOf` bs = bs `subsetOf` as
 as `properSubsetOf`   bs = cardinality as < cardinality bs && as `_subsetOf` bs
@@ -114,13 +119,16 @@ constructSet :: Ord u => TaggedGraph u -> Vertex -> Set u
 constructSet tg v = Set sys (m!v)
     where (sys,m) = mkSystem tg
 
+-- |Quine's atom.
 atom :: Ord u => Set u
 atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
 
 -- elems って名前の方がよい?
+-- |The elements of a set.
 toList :: Ord u => Set u -> [Either u (Set u)]
 toList (Set sys v) = map (toSetOrElem sys) (sysGraph sys ! v)
 
+-- |Create a set from a list of elements.
 fromList :: Ord u => [Either u (Set u)] -> Set u
 fromList xs = constructSet (array (0,n) ((n,children):l), t) n
     where ((n,l,t), children) = mapAccumL phi (0,[],emptyFM) xs
@@ -134,9 +142,11 @@ fromList xs = constructSet (array (0,n) ((n,children):l), t) n
                            | (v,children) <- assocs (sysGraph sys)]
                     t'  = [(v+off,u) | (v,u) <- fmToList (sysTagging sys)]
 
+-- |The empty set.
 emptySet :: Ord u => Set u
 emptySet = fromList []
 
+-- |Create a singleton set.
 singleton :: Ord u => Either u (Set u) -> Set u
 singleton u = fromList [u]
 
@@ -182,6 +192,7 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
                                        )
 
 -- XXX: 汚いなぁ
+-- |The powerset of the set.
 powerset :: (Show u, Ord u) => Set u -> Set u
 powerset (Set sys v) = constructSet (g',t) v'
     where g = sysGraph sys
@@ -196,6 +207,7 @@ powerList = foldr phi [[]]
     where phi a xs = map (a:) xs ++ xs
 
 -- XXX: 汚いなぁ
+-- |The union of the two sets.
 union :: Ord u => Set u -> Set u -> Set u
 union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
     where g1 = sysGraph sys1
@@ -216,10 +228,12 @@ union (Set sys1 v1) (Set sys2 v2) = constructSet (g,t) v
 -- unionManySets :: Ord u => Set u -> Set u
 
 -- 効率が悪い
+-- |The intersection of the two sets.
 intersection :: Ord u => Set u -> Set u -> Set u
 a `intersection` b = separate (\x -> x `member` b) a
 
 -- 効率が悪い
+-- |The difference of the two sets.
 difference :: Ord u => Set u -> Set u -> Set u
 a `difference` b = separate (\x -> not (x `member` b)) a
 
