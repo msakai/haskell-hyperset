@@ -47,11 +47,17 @@ genTagging g =
 
 -----------------------------------------------------------------------------
 
-prop_eqReflexive (x :: Set Int)  = x==x
-prop_eqSymmetry (x :: Set Int) y = (x==y) == (y==x)
+prop_eqReflexive :: Set Int -> Bool
+prop_eqReflexive x = x==x
 
-prop_cardinalityNonNegative (x :: Set Int) = cardinality x >= 0
-prop_cardinality1 (x :: Set Int) = cardinality x == length (toList x)
+prop_eqSymmetry :: Set Int -> Set Int -> Bool
+prop_eqSymmetry x y = (x==y) == (y==x)
+
+prop_cardinalityNonNegative :: Set Int -> Bool
+prop_cardinalityNonNegative x = cardinality x >= 0
+
+prop_cardinality1 :: Set Int -> Bool
+prop_cardinality1 x = cardinality x == length (toList x)
 
 {-
 prop_propersubsetIsSubset (x :: Set Int) y =
@@ -69,13 +75,13 @@ prop_unionComm :: Set Int -> Set Int -> Bool
 prop_unionComm s1 s2 = s1 `union` s2 == s2 `union` s1
 
     
-prop_unionInclusion (x :: Set Int) y = x `subsetOf` z && y `subsetOf` z
+prop_unionInclusion (x :: Set Int) y = x `isSubsetOf` z && y `isSubsetOf` z
     where z = x `union` y
 
 prop_intersectionSize (x :: Set Int) y  = 
     cardinality (x `intersection` y) <= cardinality x &&
     cardinality (x `intersection` y) <= cardinality y
-prop_intersectionInclusion (x, y :: Set Int) = z `subsetOf` x && z `subsetOf` y
+prop_intersectionInclusion (x, y :: Set Int) = z `isSubsetOf` x && z `isSubsetOf` y
     where z = x `intersection` y
 
 prop_intersectionComm :: Set Int -> Set Int -> Bool
@@ -90,9 +96,9 @@ prop_powersetSize (x :: Set Int) =
 prop_powerset1 (x :: Set Int) =
     (cardinality x) <= 8 ==> all f (toList (powerset x))
     where f (Left _)  = False
-          f (Right z) = z `subsetOf` x
+          f (Right z) = z `isSubsetOf` x
 
 prop_powerset2 (x :: Set Int) =
    (cardinality x) <= 8 ==>
-        (Right x) `member` px && (Right emptySet) `member` px
+        (Right x) `member` px && (Right empty) `member` px
     where px = powerset x

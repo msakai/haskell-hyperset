@@ -8,33 +8,33 @@
 -- Stability   :  unstable
 -- Portability :  portable
 --
--- Hyperset
+-- An implementation of hypersets.
 --
 -----------------------------------------------------------------------------
 
 module Hyperset
     (
-    -- * Set type
+    -- * The @Set@ type
       Set
     , UrelemOrSet
 
     -- * Operators
     , (\\)
 
-    -- * Query
+    -- * Inspection
     , isWellfounded
     , cardinality
-    , isEmptySet
+    , isEmpty
     , isSingleton
     , member
-    , subsetOf
-    , supersetOf
-    , properSubsetOf
-    , properSupersetOf
+    , isSubsetOf
+    , isSupersetOf
+    , isProperSubsetOf
+    , isProperSupersetOf
 
     -- * Construction
     , atom
-    , emptySet
+    , empty
     , singleton
     , powerset
     , union
@@ -94,7 +94,7 @@ data Ord u => Set u = Set !(System u) !Vertex deriving Show
 type UrelemOrSet u = Either u (Set u)
 
 instance Ord u => Eq (Set u) where
-    s1 == s2 | isEmptySet s1 && isEmptySet s2 = True
+    s1 == s2 | isEmpty s1 && isEmpty s2 = True
     s1@(Set sys1 v1) == s2@(Set sys2 v2) =
         sysAttrTable sys1 ! v1 == sysAttrTable sys2 ! v2 &&
         cardinality s1 == cardinality s2 &&
@@ -116,8 +116,8 @@ cardinality :: Ord u => Set u -> Int
 cardinality (Set sys v) = length (sysGraph sys ! v)
 
 -- |Is this the empty set?
-isEmptySet :: Ord u => Set u -> Bool
-isEmptySet x = cardinality x == 0
+isEmpty :: Ord u => Set u -> Bool
+isEmpty x = cardinality x == 0
 
 -- |Is this a singleton set?.
 isSingleton :: Ord u => Set u -> Bool
@@ -130,7 +130,7 @@ member (Left x) (Set sys v) =
     any (\y -> lookupFM t y == Just x) (g!v)
     where t = sysTagging sys
           g = sysGraph sys
-member (Right s1) (Set sys v) | isEmptySet s1 =
+member (Right s1) (Set sys v) | isEmpty s1 =
     any (\y -> null (g!y) && lookupFM t y == Nothing) (g!v)
     where t = sysTagging sys
           g = sysGraph sys
@@ -140,9 +140,9 @@ member (Right (Set sys1 v1)) (Set sys2 v2) =
           g = sysGraph sys
 
 
-_subsetOf :: Ord u => Set u -> Set u -> Bool
-s `_subsetOf` _ | isEmptySet s = True
-(Set sys1 v1) `_subsetOf` (Set sys2 v2) =
+_isSubsetOf :: Ord u => Set u -> Set u -> Bool
+s `_isSubsetOf` _ | isEmpty s = True
+(Set sys1 v1) `_isSubsetOf` (Set sys2 v2) =
     all (\x -> (in1!x) `FS.elementOf` ys) (g1 ! v1)
     where g1 = sysGraph sys1
           g2 = sysGraph sys2
@@ -150,24 +150,24 @@ s `_subsetOf` _ | isEmptySet s = True
           ys = FS.mkSet (map (in2!) (g2 ! v2))
 
 -- |Is this a subset?
--- (s1 `subsetOf` s2) tells whether s1 is a subset of s2.
-subsetOf :: Ord u => Set u -> Set u -> Bool
-as `subsetOf` bs = cardinality as <= cardinality bs && as `_subsetOf` bs
+-- (s1 `isSubsetOf` s2) tells whether s1 is a subset of s2.
+isSubsetOf :: Ord u => Set u -> Set u -> Bool
+as `isSubsetOf` bs = cardinality as <= cardinality bs && as `_isSubsetOf` bs
 
 -- |Is this superset?
--- (s1 `supersetOf` s2) tells whether s1 is a superset of s2.
-supersetOf :: Ord u => Set u -> Set u -> Bool
-as `supersetOf` bs = bs `subsetOf` as
+-- (s1 `isSupersetOf` s2) tells whether s1 is a superset of s2.
+isSupersetOf :: Ord u => Set u -> Set u -> Bool
+as `isSupersetOf` bs = bs `isSubsetOf` as
 
 -- |Is this a proper subset?
 -- (s1 `propertSubsetOf` s2) tells whether s1 is a proper subset of s2.
-properSubsetOf :: Ord u => Set u -> Set u -> Bool
-as `properSubsetOf` bs = cardinality as < cardinality bs && as `_subsetOf` bs
+isProperSubsetOf :: Ord u => Set u -> Set u -> Bool
+as `isProperSubsetOf` bs = cardinality as < cardinality bs && as `_isSubsetOf` bs
 
 -- |Is this a proper subset?
 -- (s1 `propertSupersetOf` s2) tells whether s1 is a proper superset of s2.
-properSupersetOf :: Ord u => Set u -> Set u -> Bool
-as `properSupersetOf` bs = bs `properSubsetOf` as
+isProperSupersetOf :: Ord u => Set u -> Set u -> Bool
+as `isProperSupersetOf` bs = bs `isProperSubsetOf` as
 
 {--------------------------------------------------------------------
   Construction
@@ -178,8 +178,8 @@ atom :: Ord u => Set u
 atom = constructSet (array (0,0) [(0,[0])], emptyFM) 0
 
 -- |The empty set.
-emptySet :: Ord u => Set u
-emptySet = fromList []
+empty :: Ord u => Set u
+empty = fromList []
 
 -- |Create a singleton set.
 singleton :: Ord u => UrelemOrSet u -> Set u
