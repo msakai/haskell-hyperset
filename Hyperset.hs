@@ -299,7 +299,22 @@ type Attr =
     , Rank -- Rank
     )
 
-type Rank = Maybe Int
+data Rank
+    = Rank !Int
+    | RankNegInf -- -∞
+    deriving (Eq,Show,Read)
+
+instance Ord Rank where
+    Rank m `compare` Rank n = m `compare` n
+    RankNegInf `compare` RankNegInf = EQ
+    RankNegInf `compare` _ = LT
+    _ `compare` RankNegInf = GT
+
+succRank :: Rank -> Rank
+succRank (Rank n)   = Rank (n+1)
+succRank RankNegInf = RankNegInf
+
+--type Rank = Maybe Int
 -- Nothing means -∞.
 -- Assuming that (Ord a => Ord (Maybe a)) and (∀x. Nothing < Just x).
 
@@ -317,21 +332,21 @@ attrTable g = table
               where wf     = False
                     rank x = h x xs
           h x xs
-              | null (g!x)       = Just 0
-              | FS.isEmptySet ms = Nothing
+              | null (g!x)       = Rank 0
+              | FS.isEmptySet ms = RankNegInf
               | otherwise =
                   foldl1 max [r' | ch <- FS.setToList ms
                               , let (wf,r) = table ! ch
-                                    r'     = if wf then fmap (+1) r else r]
+                                    r'     = if wf then succRank r else r]
               where ms = FS.mkSet (concatMap (g!) xs) `FS.minusSet` FS.mkSet xs
 
 rankTableTest1 = a==b
     where a = rankTable (array (0,2) [(0,[1,2]), (1,[1]), (2,[])])
-          b = array (0,2) [(0,Just 1),(1,Nothing),(2,Just 0)]
+          b = array (0,2) [(0,Rank 1),(1,RankNegInf),(2,Rank 0)]
 
 rankTableTest2 = a==b
     where a = rankTable (array (0,4) [(0,[1,2]), (1,[0]), (2,[3,4]), (3,[2]), (4,[]) ])
-          b = array (0,4) [(0,Just 1),(1,Just 1),(2,Just 1),(3,Just 1),(4,Just 0)]
+          b = array (0,4) [(0,Rank 1),(1,Rank 1),(2,Rank 1),(3,Rank 1),(4,Rank 0)]
 
 -----------------------------------------------------------------------------
 
@@ -388,7 +403,7 @@ refine g p r v =
 -----------------------------------------------------------------------------
 
 minimize :: (Ord u) => TaggedGraph u -> (TaggedGraph u, Table Vertex)
-minimize tg@(g,t) = ((g',t'), m)
+minimize tg@(g,t) = {-trace (seq g $ seq m $ show (g,m)) $ -} ((g',t'), m)
     where g' = array (0, sizeFM fm - 1)
                  [(i, sort $ nub $ map (m!) (g!x)) | (i,x:_) <- c]
           t' = listToFM [(m!v,u) | (v,u) <- fmToList t]
@@ -404,7 +419,7 @@ minimize tg@(g,t) = ((g',t'), m)
                               (indices g))
 
 minimize' :: (Ord u) => TaggedGraph u -> ST st (G st)
-minimize' (graph, tagging) =
+minimize' (graph, tagging) = {- trace (seq graph $ show (attrTable graph)) $ -}
     do g <- mkGFromGraph graph
        let b :: FiniteMap Rank [Vertex]
            b = addListToFM_C (\old new -> new++old) emptyFM
@@ -413,12 +428,12 @@ minimize' (graph, tagging) =
                   (fmToList b)
        let -- p :: P st
            p = listToFM p_
-       case lookupFM b Nothing of
+       case lookupFM b RankNegInf of
            Nothing -> return ()
            Just xs@(x:_) ->
                do x <- collapseList g xs
-                  refine g p Nothing x
-       case lookupFM p (Just 0) of
+                  refine g p RankNegInf x
+       case lookupFM p (Rank 0) of
            Just ref -> modifySTRef ref (divideRank0 tagging)
            Nothing  -> return ()
        let loop (i,ref) =
@@ -426,7 +441,7 @@ minimize' (graph, tagging) =
                   let f xs@(x:_) = do x <- collapseList g xs
                                       refine g p i x
                   mapM_ f di
-       mapM_ loop (fmToList (delFromFM p Nothing))
+       mapM_ loop (fmToList (delFromFM p RankNegInf))
        return g
 
 divideRank0 :: (Ord u) => Tagging u -> [Partition] -> [Partition]
