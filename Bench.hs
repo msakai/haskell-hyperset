@@ -21,5 +21,5 @@ fuga2 = powerset (fromList l)
 
 
 main :: IO ()
-main = putStrLn $ show $ cardinality $ fuga2
+main = putStrLn $ show $ size $ fuga
 

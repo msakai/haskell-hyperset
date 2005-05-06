@@ -3,7 +3,6 @@
 import Hyperset hiding (elems)
 import Data.Graph
 import Data.Array
-import Data.List (sort,nub)
 import Data.FiniteMap
 import Debug.QuickCheck
 import Control.Monad (foldM)
@@ -128,3 +127,6 @@ prop_powerset2 x =
     where px = powerset x
 
 -----------------------------------------------------------------------------
+
+main :: IO ()
+main = test prop_unionAbsorb

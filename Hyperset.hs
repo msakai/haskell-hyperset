@@ -23,7 +23,7 @@ module Hyperset
 
     -- * Inspection
     , isWellfounded
-    , cardinality
+    , size
     , isEmpty
     , isSingleton
     , member
@@ -65,6 +65,7 @@ module Hyperset
     -- , mapSet
     ) where
 
+import Prelude hiding (null)
 import Data.Graph (Graph,Vertex,Table)
 import qualified Data.Graph as Graph (scc)
 import Data.Tree (Tree)
@@ -74,9 +75,9 @@ import qualified Data.Array.IArray as IArray
 import qualified Data.IntSet as IS
 import Data.Array.ST
 import qualified Data.Map as Map
-import Data.List (mapAccumL)
+import qualified Data.List as List (mapAccumL, null)
 import Data.STRef
-import Control.Monad (unless, foldM) -- mapM_, mapM
+import Control.Monad (unless, foldM)
 import Control.Monad.ST (ST)
 import qualified Seq as Seq
 import Data.Monoid
@@ -106,7 +107,7 @@ instance Ord u => Eq (Set u) where
     s1 == s2 | isEmpty s1 && isEmpty s2 = True
     s1@(Set sys1 v1) == s2@(Set sys2 v2) =
         getAttr s1 == getAttr s2 &&
-        cardinality s1 == cardinality s2 &&
+        size s1 == size s2 &&
         in1 v1 == in2 v2
         where (_,in1,in2) = mergeSystem sys1 sys2
 
@@ -128,16 +129,16 @@ getAttr :: Ord u => Set u -> Attr
 getAttr (Set sys v) = sysAttrTable sys ! v
 
 -- |The number of elements in the set.
-cardinality :: Ord u => Set u -> Int
-cardinality (Set sys v) = length (sysGraph sys ! v)
+size :: Ord u => Set u -> Int
+size (Set sys v) = length (sysGraph sys ! v)
 
 -- |Is this the empty set?
 isEmpty :: Ord u => Set u -> Bool
-isEmpty x = cardinality x == 0
+isEmpty x = size x == 0
 
 -- |Is this a singleton set?.
 isSingleton :: Ord u => Set u -> Bool
-isSingleton x = cardinality x == 1
+isSingleton x = size x == 1
 
 -- XXX: 汚いなぁ
 -- |Is the element in the set?
@@ -147,7 +148,7 @@ member (Urelem x) (Set sys v) =
     where t = sysTagging sys
           g = sysGraph sys
 member (SetElem s1) (Set sys v) | isEmpty s1 =
-    any (\y -> null (g!y) && Map.lookup y t == Nothing) (g!v)    
+    any (\y -> List.null (g!y) && Map.lookup y t == Nothing) (g!v)    
     where t = sysTagging sys
           g = sysGraph sys
 member (SetElem (Set sys1 v1)) (Set sys2 v2) =
@@ -167,7 +168,7 @@ s `_subset` _ | isEmpty s = True
 -- |Is this a subset?
 -- @(s1 \`subset\` s2)@ tells whether s1 is a subset of s2.
 subset :: Ord u => Set u -> Set u -> Bool
-as `subset` bs = cardinality as <= cardinality bs && as `_subset` bs
+as `subset` bs = size as <= size bs && as `_subset` bs
 
 -- |Is this superset?
 -- @(s1 \`superset\` s2)@ tells whether s1 is a superset of s2.
@@ -177,7 +178,7 @@ as `superset` bs = bs `subset` as
 -- |Is this a proper subset?
 -- @(s1 \`properSubset\` s2)@ tells whether s1 is a proper subset of s2.
 properSubset :: Ord u => Set u -> Set u -> Bool
-as `properSubset` bs = cardinality as < cardinality bs && as `_subset` bs
+as `properSubset` bs = size as < size bs && as `_subset` bs
 
 -- |Is this a proper subset?
 -- @(s1 \`properSuperset\` s2)@ tells whether s1 is a proper superset of s2.
@@ -307,7 +308,7 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
               where g = sysGraph sys
                     m :: Array Var Vertex
                     m = array (bounds g) m'
-                    ((ub',l',t'), m') = mapAccumL psi (ub,l,t) (assocs g)
+                    ((ub',l',t'), m') = List.mapAccumL psi (ub,l,t) (assocs g)
                         where psi (ub,l,t) (x,children)
                                | v==x =
                                    ( (ub, (lhs, map (m!) children) : l, t)
@@ -516,7 +517,7 @@ attrTable g = table
                                  and [wf | ch <- g!x, let (wf,_) = table!ch]
                          _ -> False
                     rank = case sccL of
-                           [x] | null (g!x) -> Rank 0
+                           [x] | List.null (g!x) -> Rank 0
                            _   | IS.null children -> RankNegInf
                                | otherwise ->
                                    maximum
@@ -631,7 +632,7 @@ mkSystem :: Ord u =>
 mkSystem g t attrs =
     ( System
       { sysGraph     = g'
-      , sysTagging   = Map.filterWithKey (\v _ -> null (g' ! v)) t'
+      , sysTagging   = Map.filterWithKey (\v _ -> List.null (g' ! v)) t'
       , sysAttrTable = attrs'
       }
     , f

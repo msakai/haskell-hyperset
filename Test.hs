@@ -21,7 +21,7 @@ test2 :: Set Int
 test2 = powerset test1
 
 test3 :: Bool
-test3 = cardinality (powerset x) == 8
+test3 = size (powerset x) == 8
     where x :: Set Int
           SetElem x = decorate (array (0,4) [(0,[1,3,4]),(1,[0,1,2,4]),(2,[]),(3,[2,3,4]),(4,[])]) (Map.fromList [(4,-1)]) ! 0
 
