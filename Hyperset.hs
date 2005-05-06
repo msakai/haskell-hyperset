@@ -149,7 +149,7 @@ member (SetElem s1) (Set sys v) | isEmpty s1 =
     where t = sysTagging sys
           g = sysGraph sys
 member (SetElem (Set sys1 v1)) (Set sys2 v2) =
-    (in1 v1) `elem` (g ! (in2 v2))
+    in1 v1 `elem` (g ! in2 v2)
     where (sys,in1,in2) = mergeSystem sys1 sys2
           g = sysGraph sys
 
@@ -337,8 +337,8 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
 -- |Let G be an accessible graph, and let U={φ}∪@u@ be a collection
 -- containing the empty set and urelemente. A tagging of G is a function
 -- t: G->U that assigns to each childless node of G an element of U.
--- For a childless node v of G, we interpret @Map.lookup v t == Just u@
--- as t(v)=u, @Map.lookup v t == Just u@ as t(v)=φ.
+-- For a childless node v of G, we interpret @IntMap.lookup v t == Just u@
+-- as t(v)=u, @IntMap.lookup v t == Nothing@ as t(v)=φ.
 type Tagging u = IM.IntMap u
 
 -- |A decoration is a function d defined on each node n of G such that
@@ -430,7 +430,7 @@ instSys sys = Gen $ \(n,g,t,a) ->
       , [(v+n, map (n+) xs) | (v,xs) <- assocs (sysGraph sys)] ++ g
       , IM.fromAscList [(k+n,v) | (k,v) <- IM.toAscList (sysTagging sys)]
 	`IM.union` t
-      , IM.fromAscList [(v+n,a) | (v,a) <- assocs (sysAttrTable sys)]
+      , IM.fromAscList [(k+n,v) | (k,v) <- assocs (sysAttrTable sys)]
 	`IM.union` a
       )
     , n
