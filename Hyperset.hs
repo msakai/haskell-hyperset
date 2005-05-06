@@ -66,21 +66,18 @@ module Hyperset
     ) where
 
 import Prelude hiding (null)
-import Data.Graph (Graph,Vertex,Table)
-import qualified Data.Graph as Graph (scc)
-import Data.Tree (Tree)
-import qualified Data.Tree as Tree (flatten)
+import Data.Graph (Graph,Vertex,Table,scc)
+import Data.Tree (Tree,flatten)
 import Data.Array.IArray hiding (elems)
-import qualified Data.Array.IArray as IArray
-import qualified Data.IntSet as IS
 import Data.Array.ST
-import qualified Data.Map as Map
-import qualified Data.List as List (mapAccumL, null)
 import Data.STRef
+import Data.Maybe (fromJust)
+import qualified Data.List as List (mapAccumL, null)
+import qualified Data.Map as Map
+import qualified Data.IntSet as IS
+import qualified Data.IntMap as IM
 import Control.Monad (unless, foldM)
 import Control.Monad.ST (ST)
-import qualified Seq as Seq
-import Data.Monoid
 
 {--------------------------------------------------------------------
   Operators
@@ -113,7 +110,7 @@ instance Ord u => Eq (Set u) where
 
 -- for debugging
 instance (Ord u, Show u) => Show (Set u) where
-    showsPrec d s = showsPrec d (g, v, Map.toList t)
+    showsPrec d s = showsPrec d (g, v, IM.toList t)
        where (g,v,t) = picture s
 
 {--------------------------------------------------------------------
@@ -144,11 +141,11 @@ isSingleton x = size x == 1
 -- |Is the element in the set?
 member :: Ord u => Elem u -> Set u -> Bool
 member (Urelem x) (Set sys v) =
-    any (\y -> Map.lookup y t == Just x) (g!v)
+    any (\y -> IM.lookup y t == Just x) (g!v)
     where t = sysTagging sys
           g = sysGraph sys
 member (SetElem s1) (Set sys v) | isEmpty s1 =
-    any (\y -> List.null (g!y) && Map.lookup y t == Nothing) (g!v)    
+    any (\y -> List.null (g!y) && IM.lookup y t == Nothing) (g!v)    
     where t = sysTagging sys
           g = sysGraph sys
 member (SetElem (Set sys1 v1)) (Set sys2 v2) =
@@ -193,7 +190,7 @@ as `properSuperset` bs = bs `properSubset` as
 quineAtom :: Ord u => Set u
 quineAtom = toSet sys 0
     where (sys,_) = mkSystem (listArray (0,0) [[0]])
-                             Map.empty
+                             IM.empty
                              (listArray (0,0) [(False,RankNegInf)])
 
 -- |The empty set.
@@ -209,8 +206,8 @@ powerset :: Ord u => Set u -> Set u
 powerset (Set sys v) = toSet sys' (f ! v')
     where (v',sys',f) = mkSystem3 $
                         do instSys sys
-                           xs <- mapM addNode (powerList (sysGraph sys ! v))
-                           addNode xs
+                           xs <- mapM addSet (powerList (sysGraph sys ! v))
+                           addSet xs
 
 -- Mark Jones' powerSet
 -- http://www.haskell.org/pipermail/haskell-cafe/2003-June/004484.html
@@ -226,7 +223,7 @@ union (Set sys1 v1) (Set sys2 v2) = toSet sys' (f ! v')
     where (v',sys',f) = mkSystem3 $
                         do instSys sys1
                            off <- instSys sys2
-                           addNode (map (off+) (g2!v2) ++ g1!v1)
+                           addSet (map (off+) (g2!v2) ++ g1!v1)
           g1 = sysGraph sys1
           g2 = sysGraph sys2
 
@@ -249,8 +246,8 @@ equivClass r (Set sys v) = toSet sys' (f ! v')
           (v',sys',f) = mkSystem3 $
                         do instSys sys
                            let xs = classifyList r' (sysGraph sys ! v)
-                           ys <- mapM addNode xs
-                           addNode ys
+                           ys <- mapM addSet xs
+                           addSet ys
 
 classifyList :: (a -> a -> Bool) -> [a] -> [[a]]
 classifyList f = foldl phi []
@@ -263,13 +260,13 @@ separate :: Ord u => (Elem u -> Bool) -> (Set u -> Set u)
 separate f (Set sys v) = toSet sys' (m ! v')
     where (v',sys',m) = mkSystem3 $
                         do instSys sys
-                           addNode [ch | ch <- sysGraph sys ! v
-                                   , f (toElem sys ch)]
+                           addSet [ch | ch <- sysGraph sys ! v
+                                  , f (toElem sys ch)]
 
 -- partition :: Ord u => (Elem u -> Bool) -> Set u -> (Set u, Set u)
 
 toElem :: Ord u => System u -> Vertex -> Elem u
-toElem sys v = case Map.lookup v (sysTagging sys) of
+toElem sys v = case IM.lookup v (sysTagging sys) of
                Just e  -> Urelem e
                Nothing -> SetElem (Set sys v)
 
@@ -296,14 +293,14 @@ type Solution u = Array Var (Set u)
 solve :: Ord u => SystemOfEquations u -> Solution u
 solve equations = listArray (bounds equations)
                   [Set sys (m!i) | i <- indices equations]
-    where (sys,m) = mkSystem0 tg
+    where (sys,m) = mkSystemFromTaggedGraph tg
 	  tg = mkTaggedGraphFromEquations equations
 
 -- XXX: 汚いなぁ
 mkTaggedGraphFromEquations :: Ord u => SystemOfEquations u -> TaggedGraph u
 mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
     where (lb,ub) = bounds equations
-          (ub',l,t) = foldl phi (ub,[],Map.empty) (assocs equations)
+          (ub',l,t) = foldl phi (ub,[],IM.empty) (assocs equations)
           phi (ub,l,t) (lhs, (Set sys v)) = (ub', l', t')
               where g = sysGraph sys
                     m :: Array Var Vertex
@@ -315,13 +312,13 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
                                    , (x, lhs)
                                    )
                                | otherwise =
-                                   case Map.lookup x (sysTagging sys) of
+                                   case IM.lookup x (sysTagging sys) of
                                    Just (Right v) ->
                                        ((ub,l,t), (x,v))
                                    Just (Left u) ->
                                        ( ( ub+1
                                          , (ub+1,[]) : l
-                                         , Map.insert (ub+1) u t
+                                         , IM.insert (ub+1) u t
 					 )
                                        , (x, ub+1)
                                        )
@@ -342,7 +339,7 @@ mkTaggedGraphFromEquations equations = (array (lb,ub') l, t)
 -- t: G->U that assigns to each childless node of G an element of U.
 -- For a childless node v of G, we interpret @Map.lookup v t == Just u@
 -- as t(v)=u, @Map.lookup v t == Just u@ as t(v)=φ.
-type Tagging u = Map.Map Vertex u
+type Tagging u = IM.IntMap u
 
 -- |A decoration is a function d defined on each node n of G such that
 --
@@ -355,7 +352,7 @@ type Decoration u = Table (Elem u)
 -- |compute the decoration.
 decorate :: Ord u => Graph -> Tagging u -> Decoration u
 decorate g t = d
-    where (sys,m) = mkSystem0 (g,t)
+    where (sys,m) = mkSystemFromTaggedGraph (g,t)
           d = listArray (bounds g) [toElem sys (m!v) | v <- indices g]
 
 -- |Tagged apg(accessible pointed graph) that pictures the set.
@@ -384,7 +381,7 @@ fromList xs = toSet sys (f ! v)
                                    SetElem (Set sys v) ->
                                        do off <- instSys sys
                                           return (off+v)
-                         addNode ys
+                         addSet ys
 
 {--------------------------------------------------------------------
   Implementation
@@ -399,10 +396,6 @@ data System u =
     , sysAttrTable    :: !(Table Attr)
     }
 
-mkSystem0 :: Ord u => TaggedGraph u -> (System u, Table Vertex)
-mkSystem0 (g,t) = mkSystem g t attrs
-    where attrs = attrTable g
-
 mergeSystem :: Ord u => System u -> System u ->
                (System u, Vertex -> Vertex, Vertex -> Vertex)
 mergeSystem sys1 sys2 = (sys, in1, in2)
@@ -414,12 +407,9 @@ type GenState u =
     ( Int
     , [(Int,[Int])]
     , Tagging u
-    , Seq.Seq (Table Attr -> [(Int,Attr)])
+    , IM.IntMap Attr
     )
-newtype Gen u a = Gen (GenState u -> (GenState u, a))
-
-runGen :: Ord u => Gen u a -> GenState u -> (GenState u, a)
-runGen (Gen x) = x
+newtype Gen u a = Gen{ runGen :: GenState u -> (GenState u, a) }
 
 {-# INLINE returnG #-}
 returnG :: Ord u => a -> Gen u a
@@ -438,18 +428,21 @@ instSys :: Ord u => System u -> Gen u Vertex
 instSys sys = Gen $ \(n,g,t,a) ->
     ( ( n + (rangeSize (bounds (sysGraph sys)))
       , [(v+n, map (n+) xs) | (v,xs) <- assocs (sysGraph sys)] ++ g
-      , t `Map.union` Map.mapKeysMonotonic (n+) (sysTagging sys)
-      , Seq.singleton (const [(v+n,a) | (v,a) <- assocs (sysAttrTable sys)]) `mappend` a
+      , IM.fromAscList [(k+n,v) | (k,v) <- IM.toAscList (sysTagging sys)]
+	`IM.union` t
+      , IM.fromAscList [(v+n,a) | (v,a) <- assocs (sysAttrTable sys)]
+	`IM.union` a
       )
     , n
     )
 
-addNode :: Ord u => [Vertex] -> Gen u Vertex
-addNode children = Gen $ \(n,g,t,a) ->
+addSet :: Ord u => [Vertex] -> Gen u Vertex
+addSet children = Gen $ \(n,g,t,a) ->
     ( ( n+1
       , (n, children) : g
       , t
-      , Seq.singleton (\table -> [(n,attrOfSetFromElemAttrs [table!ch | ch <- children])]) `mappend` a
+      , IM.insert n (attrOfSetFromElemAttrs
+		     [fromJust (IM.lookup ch a) | ch <- children]) a
       )
     , n
     )
@@ -458,17 +451,17 @@ addUrelem :: Ord u => u -> Gen u Vertex
 addUrelem u = Gen $ \(n,g,t,a) ->
     ( ( n+1
       , (n,[]) : g
-      , Map.insert n u t
-      , Seq.singleton (const [(n,attrUrelem)]) `mappend` a
+      , IM.insert n u t
+      , IM.insert n attrUrelem a
       )
     , n
     )
 
 mkSystem3 :: Ord u => Gen u a -> (a, System u, Table Vertex)
 mkSystem3 gen =
-    case runGen gen (0,[],Map.empty,Seq.empty) of
+    case runGen gen (0,[],IM.empty,IM.empty) of
     ((n,g,t,a),val) ->
-        let attrs = array (0,n-1) (concat [f attrs | f <- Seq.toList a]) in
+        let attrs = array (0,n-1) (IM.toList a) in
             case mkSystem (array (0,n-1) g) t attrs of
             (sys, f) -> (val, sys, f)
 
@@ -506,10 +499,10 @@ attrTable g = table
                   [(x,(wf,rank)) | (xs,wf,rank) <- sccInfo, x <- IS.toList xs]
           gS = fmap IS.fromList g
           sccInfo :: [(IS.IntSet, Bool, Rank)]
-          sccInfo = map f (Graph.scc g)
+          sccInfo = map f (scc g)
           f :: Tree Vertex -> (IS.IntSet, Bool, Rank)
           f sccT = (sccS, wf, rank)
-              where sccL = Tree.flatten sccT
+              where sccL = flatten sccT
                     sccS = IS.fromList sccL
                     wf = case sccL of
                          [x] | x `IS.member` (gS!x) -> False
@@ -540,26 +533,7 @@ attrOfSetFromElemAttrs xs =
 
 -----------------------------------------------------------------------------
 
-type Block = IS.IntSet
-type Partition = [Block]
-
-type CellInfo =
-    ( Map.Map Rank IS.IntSet
-    , IS.IntSet
-    , Attr
-    )
-
-type CollapsingTable      = Array Vertex (Either Vertex CellInfo)
-type STCollapsingTable st = STArray st Vertex (Either Vertex CellInfo)
-
 type PreimageMap = Map.Map Rank IS.IntSet
-
-mkSTCollapsingTable :: Graph -> Table Attr -> ST st (STCollapsingTable st)
-mkSTCollapsingTable g table =
-    do let t :: Array Vertex PreimageMap
-           t = mkPreimageTable g table
-       newListArray (bounds g) [ Right (t!v, IS.singleton v, table!v)
-                               | v <- indices g ]
 
 mkPreimageTable :: Graph -> Table Attr -> Array Vertex PreimageMap
 mkPreimageTable g t = runSTArray (f g t)
@@ -574,6 +548,27 @@ mkPreimageTable g t = runSTArray (f g t)
                              let fm' = Map.insertWith IS.union rank v' fm
                              writeArray table ch fm'
                  return table
+
+-----------------------------------------------------------------------------
+
+type Block = IS.IntSet
+type Partition = [Block]
+
+type CellInfo =
+    ( Map.Map Rank IS.IntSet
+    , IS.IntSet
+    , Attr
+    )
+
+type CollapsingTable      = Array Vertex (Either Vertex CellInfo)
+type STCollapsingTable st = STArray st Vertex (Either Vertex CellInfo)
+
+mkSTCollapsingTable :: Graph -> Table Attr -> ST st (STCollapsingTable st)
+mkSTCollapsingTable g table =
+    do let t :: Array Vertex PreimageMap
+           t = mkPreimageTable g table
+       newListArray (bounds g) [ Right (t!v, IS.singleton v, table!v)
+                               | v <- indices g ]
 
 getNodeInfo :: STCollapsingTable st -> Vertex -> ST st (Vertex, Map.Map Rank IS.IntSet, IS.IntSet, Attr)
 getNodeInfo g x =
@@ -627,17 +622,21 @@ split splitter xs = foldr phi [] xs
 
 -----------------------------------------------------------------------------
 
+mkSystemFromTaggedGraph :: Ord u => TaggedGraph u -> (System u, Table Vertex)
+mkSystemFromTaggedGraph (g,t) = mkSystem g t attrs
+    where attrs = attrTable g
+
 mkSystem :: Ord u =>
 	    Graph -> Tagging u -> Table Attr -> (System u, Table Vertex)
 mkSystem g t attrs =
     ( System
       { sysGraph     = g'
-      , sysTagging   = Map.filterWithKey (\v _ -> List.null (g' ! v)) t'
+      , sysTagging   = IM.filterWithKey (\v _ -> List.null (g' ! v)) t'
       , sysAttrTable = attrs'
       }
     , f
     )
-    where t' = Map.mapKeys (f!) t
+    where t' = IM.fromAscList [(f!k,v) | (k,v) <- IM.toAscList t]
           (g',attrs',f) = mkFiltration g ct
           ct = runSTArray (do ct <- mkSTCollapsingTable g attrs
                               minimize ct t
@@ -674,10 +673,10 @@ minimize g tagging =
        case Map.lookup (Rank 0) p of
            Just (ref,b0) -> writeSTRef ref (Map.elems fm)
                where fm = Map.fromListWith IS.union
-                          [ (lookupMaybe x tagging, IS.singleton x)
+                          [ (IM.lookup x tagging, IS.singleton x)
                             | x <- IS.toList b0 ]
-		     lookupMaybe :: Ord k => k -> Map.Map k a -> Maybe a
-		     lookupMaybe = Map.lookup -- XXX
+		     --lookupMaybe :: Ord k => k -> Map.Map k a -> Maybe a
+		     --lookupMaybe = Map.lookup -- XXX
            Nothing -> return ()
 
        case Map.lookup RankNegInf b of
