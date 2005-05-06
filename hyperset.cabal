@@ -1,0 +1,8 @@
+Name:           hyperset
+Version:        0.0.2
+License:        BSD3
+Author:         Masahiro Sakai
+Build-Depends:  base
+Synopsis:       non-wellfounded set.
+Exposed-modules:
+        Data.Hyperset
