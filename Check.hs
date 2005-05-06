@@ -1,6 +1,6 @@
 -----------------------------------------------------------------------------
 
-import Hyperset hiding (elems)
+import Data.Hyperset hiding (elems)
 import Data.Graph
 import Data.Array
 import Data.FiniteMap

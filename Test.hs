@@ -1,4 +1,4 @@
-import Hyperset
+import Data.Hyperset
 import Data.Array
 import Data.List
 import qualified Data.IntMap as IntMap

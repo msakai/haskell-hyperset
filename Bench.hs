@@ -1,4 +1,4 @@
-import Hyperset
+import Data.Hyperset
 
 -- これを実用的な計算量で計算できるようにしたいなぁ。
 hoge :: Set ()
