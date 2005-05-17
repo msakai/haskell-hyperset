@@ -12,7 +12,7 @@
 --
 -----------------------------------------------------------------------------
 
-module Hyperset
+module Data.Hyperset
     (
     -- * The @Set@ type
       Set
