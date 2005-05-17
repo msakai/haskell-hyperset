@@ -1,4 +1,5 @@
-HCFLAGS = -Wall -O -prof -auto-all
+HCFLAGS = -Wall -O
+#HCFLAGS = -Wall -O -prof -auto-all
 # -ddump-simpl
 # -ddump-minimal-imports
 # -O
@@ -6,6 +7,9 @@ HCFLAGS = -Wall -O -prof -auto-all
 # compiling with -prof -auto-all and running with +RTS -xc
 
 all: bench.exe test.exe
+
+check.exe: Check.hs Hyperset.hs
+	ghc $(HCFLAGS) --make $< -o $@
 
 bench.exe: Bench.hs Hyperset.hs
 	ghc $(HCFLAGS) --make $< -o $@
