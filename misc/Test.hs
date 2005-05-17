@@ -1,6 +1,6 @@
 import Data.Hyperset
 import Data.Array
-import Data.List
+import Data.List (intersperse)
 import qualified Data.IntMap as IntMap
 
 showSet :: (Show u, Ord u) => Set u -> String

@@ -3,8 +3,8 @@
 import Data.Hyperset hiding (elems)
 import Data.Graph
 import Data.Array
-import Data.FiniteMap
-import Debug.QuickCheck
+import qualified Data.IntMap as IntMap
+import Test.QuickCheck
 import Control.Monad (foldM)
 
 -----------------------------------------------------------------------------
@@ -15,11 +15,11 @@ instance (Ord u, Arbitrary u) => Arbitrary (Set u) where
            t <- genTagging g
            let d = decorate g t
                f [] = arbitrary
-               f (Urelem _ : xs)  = f xs
-               f (SetElem x : xs) = return x
+               f (Urelem _ : xs) = f xs
+               f (SetElem x : _) = return x
            f (elems d)
     coarbitrary set =
-        variant v . coarbitrary (fmToList t) . coarbitrary (assocs g)
+        variant v . coarbitrary (IntMap.toList t) . coarbitrary (assocs g)
         where (g,v,t) = picture set
 
 genGraph :: Gen Graph
@@ -36,7 +36,7 @@ genGraph = sized genGraph'
 genTagging :: (Ord u, Arbitrary u) => Graph -> Gen (Tagging u)
 genTagging g = 
     do l <- foldM f [] [i | (i,children) <- assocs g, null children]
-       return (listToFM l)
+       return (IntMap.fromList l)
     where f as x =
               do b <- arbitrary
                  if b
@@ -54,11 +54,11 @@ prop_eqSymmetry x y = (x==y) == (y==x)
 
 -----------------------------------------------------------------------------
 
-prop_cardinalityNonNegative :: Set Int -> Bool
-prop_cardinalityNonNegative x = cardinality x >= 0
+prop_sizeNonNegative :: Set Int -> Bool
+prop_sizeNonNegative x = size x >= 0
 
-prop_cardinality1 :: Set Int -> Bool
-prop_cardinality1 x = cardinality x == length (toList x)
+prop_size1 :: Set Int -> Bool
+prop_size1 x = size x == length (toList x)
 
 -----------------------------------------------------------------------------
 
@@ -78,9 +78,9 @@ prop_unionAbsorb x y = (x `union` y) `union` y == (x `union` y)
 
 prop_unionSize :: Set Int -> Set Int -> Bool
 prop_unionSize x y =
-    cardinality (x `union` y) <= cardinality x + cardinality y &&
-    cardinality x <= cardinality (x `union` y) &&
-    cardinality y <= cardinality (x `union` y)
+    size (x `union` y) <= size x + size y &&
+    size x <= size (x `union` y) &&
+    size y <= size (x `union` y)
 
 prop_unionInclusion :: Set Int -> Set Int -> Bool
 prop_unionInclusion x y = x `subset` z && y `subset` z
@@ -99,8 +99,8 @@ prop_intersectionAbsorb x y = (x `intersection` y) `intersection` y == (x `inter
 
 prop_intersectionSize :: Set Int -> Set Int -> Bool
 prop_intersectionSize x y  = 
-    cardinality (x `intersection` y) <= cardinality x &&
-    cardinality (x `intersection` y) <= cardinality y
+    size (x `intersection` y) <= size x &&
+    size (x `intersection` y) <= size y
 
 prop_intersectionInclusion :: Set Int -> Set Int -> Bool
 prop_intersectionInclusion x y = z `subset` x && z `subset` y
@@ -111,19 +111,19 @@ prop_intersectionInclusion x y = z `subset` x && z `subset` y
 
 prop_powersetSize :: Set Int -> Property
 prop_powersetSize x =
-    c <= 8 ==> 2^c == cardinality (powerset x)
-    where c = cardinality x
+    c <= 8 ==> 2^c == size (powerset x)
+    where c = size x
 
 prop_powerset1 :: Set Int -> Property
 prop_powerset1 x =
-    (cardinality x) <= 8 ==> all f (toList (powerset x))
+    (size x) <= 8 ==> all f (toList (powerset x))
     where f (Urelem _)  = False
           f (SetElem z) = z `subset` x
 
 prop_powerset2 :: Set Int -> Property
 prop_powerset2 x =
-   (cardinality x) <= 8 ==>
-        (SetElem x) `member` px && (SetElem empty) `member` px
+   (size x <= 8) ==>
+        (SetElem x `member` px) && (SetElem empty `member` px)
     where px = powerset x
 
 -----------------------------------------------------------------------------
